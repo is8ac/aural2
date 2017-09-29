@@ -1,6 +1,7 @@
 package tfutils
 
 import (
+	"errors"
 	"log"
 	"os"
 
@@ -28,6 +29,63 @@ func ParseWavBytesToPCM(s *op.Scope) (wavBytes, pcm tf.Output) {
 	multiChanPCM, _ := op.DecodeWav(s.SubScope("decode_wav"), wavBytes)              // decode the wav file into PCM. The first dimension is time, the second is channels.
 	channels := op.Unpack(s.SubScope("channels"), multiChanPCM, 1, op.UnpackAxis(1)) // unpack the channels.
 	pcm = channels[0]                                                                // we only want the first channel
+	return
+}
+
+// MakeCleanWav returns a function which takes the bytes of a wav file, converts to PCM, checks that it is good and reconstructs a wav file from the PCM.
+// If the input is malformed, it will return an error. The output may be slighty different from the input. Use the output.
+func MakeCleanWav(sampleRate int) (cleanWav func([]byte) ([]byte, error), err error) {
+	s := op.NewScope()
+	dim := op.Const(s.SubScope("dim"), int32(1))
+	inputPH := op.Placeholder(s.SubScope("wav_bytes"), tf.String, op.PlaceholderShape(tf.ScalarShape()))
+	sampleRatePH := op.Placeholder(s.SubScope("sample_rate"), tf.Int32)
+	pcmChansOP, sampleRateOP := op.DecodeWav(s.SubScope("decode_wav"), inputPH, op.DecodeWavDesiredChannels(1))
+	_ = sampleRateOP
+	channels := op.Unpack(s.SubScope("channels"), pcmChansOP, 1, op.UnpackAxis(1)) // unpack the channels.
+	shape := op.Shape(s.SubScope("shape"), channels[0])
+	expanded := op.ExpandDims(s.SubScope("expand_dims"), channels[0], dim) // again, make AudioSpectrogram happy.
+	wavBytes := op.EncodeWav(s.SubScope("encode_wav"), expanded, sampleRatePH)
+	graph, err := s.Finalize()
+	if err != nil {
+		logger.Println(err)
+		return
+	}
+	sess, err := tf.NewSession(graph, nil)
+	if err != nil {
+		logger.Println(err)
+		return
+	}
+
+	cleanWav = func(inputBytes []byte) (outputBytes []byte, err error) {
+		inputTensor, err := tf.NewTensor(string(inputBytes)) // create a string tensor from the input bytes
+		if err != nil {
+			return
+		}
+		sampleRateTensor, err := tf.NewTensor(int32(sampleRate)) // create a string tensor from the input bytes
+		if err != nil {
+			return
+		}
+		feeds := map[tf.Output]*tf.Tensor{
+			inputPH:      inputTensor,
+			sampleRatePH: sampleRateTensor,
+		}
+		result, err := sess.Run(feeds, []tf.Output{wavBytes, sampleRateOP, shape}, nil)
+		if err != nil {
+			return
+		}
+		shape := result[2].Value().([]int32)
+		if len(shape) != 1 {
+			err = errors.New("bad shape")
+			return
+		}
+		actualSampleRate := result[1].Value().(int32)
+		if actualSampleRate != int32(sampleRate) {
+			err = errors.New("wrong sample rate")
+			return
+		}
+		outputBytes = []byte(result[0].Value().(string))
+		return
+	}
 	return
 }
 

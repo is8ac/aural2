@@ -211,14 +211,14 @@ func TestBytesToBytes2(t *testing.T) {
 	s := op.NewScope()
 	wavBytesPH, pcm := ParseWavBytesToPCM(s)
 	specgramOP, sampleRatePH := ComputeMFCC(s, pcm)
-	specgramJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), specgramOP) // render image of spectrogram.
+	jpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), specgramOP) // render image
 
 	sampleRateTensor, err := tf.NewTensor(int32(44100))
 	if err != nil {
 		t.Fail()
 	}
 	feeds := map[tf.Output]*tf.Tensor{sampleRatePH: sampleRateTensor}
-	renderImage := BytesToBytes(s, wavBytesPH, specgramJpegBytesOP, feeds)
+	renderImage := BytesToBytes(s, wavBytesPH, jpegBytesOP, feeds)
 
 	wavBytes, err := ioutil.ReadFile("sox_sample.wav")
 	if err != nil {
@@ -265,7 +265,7 @@ func TestBytesToBytesConcurrent(t *testing.T) {
 		logger.Fatalln(err)
 	}
   doneChan := make(chan bool)
-  total := 1000
+  total := 100
 	for i := 0; i < total; i++ {
 		go func() {
 			imageBytes, err := renderImage(wavBytes)
@@ -284,4 +284,44 @@ func TestBytesToBytesConcurrent(t *testing.T) {
 			t.Fail()
 		}
   }
+}
+
+func TestMakeCleanWav(t *testing.T){
+	cleanWav, err := MakeCleanWav(44100)
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	wavBytes, err := ioutil.ReadFile("sox_sample.wav")
+	if err != nil {
+		logger.Fatalln(err)
+		t.Fail()
+	}
+	cleanedWav, err := cleanWav(wavBytes)
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	if len(cleanedWav) < 100 {
+		t.Fail()
+	}
+	_, err = cleanWav([]byte("some byte string that is not wav audio"))
+	if err == nil {
+		logger.Println("did not fail")
+		t.Fail()
+	}
+	cleanWav, err = MakeCleanWav(12345)
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	_, err = cleanWav(wavBytes)
+	if err == nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	if err == nil {
+		logger.Println("did not fail")
+		t.Fail()
+	}
 }

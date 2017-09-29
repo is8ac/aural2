@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aural2 tagUI</title>
+  <meta name="theme-color" content="black">
+  <link rel="stylesheet" type="text/css" href="../static/style.css">
+  <script type="text/javascript" src="../static/main.js" charset="utf-8"></script>
+</head>
+
+<body>
+  <h1>{{.UrbitSampleID}}</h1>
+  <div id="timeline">
+    <div id="curser"></div>
+    <img class="pixelated timeviz" id="spectrogram" src="../images/spectrogram/{{.Base32ID}}">
+    <img class="pixelated timeviz" id="mfcc" src="../images/mfcc/{{.Base32ID}}">
+    <audio id="audio">
+    <source src="../audio/{{.Base32ID}}" type="audio/wav">
+      Your browser does not support this audio format.
+  </audio>
+  </div>
+</body>
+
+</html>
