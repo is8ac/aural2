@@ -9,7 +9,7 @@ import (
 
 func TestReadWaveToPCM(t *testing.T) {
 	s := op.NewScope()
-	filePathTensor, err := tf.NewTensor("sox_sample.wav")
+	filePathTensor, err := tf.NewTensor("sox_sample_16k.wav")
 	if err != nil {
 		t.Fail()
 	}
@@ -45,11 +45,11 @@ func TestReadWaveToPCM(t *testing.T) {
 
 func TestComputeMFCC(t *testing.T) {
 	s := op.NewScope()
-	filePathTensor, err := tf.NewTensor("sox_sample.wav")
+	filePathTensor, err := tf.NewTensor("sox_sample_16k.wav")
 	if err != nil {
 		t.Fail()
 	}
-	sampleRateTensor, err := tf.NewTensor(int32(44100))
+	sampleRateTensor, err := tf.NewTensor(int32(16000))
 	if err != nil {
 		t.Fail()
 	}
@@ -88,7 +88,7 @@ func TestComputeMFCC(t *testing.T) {
 
 func TestComputeSpectrogram(t *testing.T) {
 	s := op.NewScope()
-	filePathTensor, err := tf.NewTensor("sox_sample.wav")
+	filePathTensor, err := tf.NewTensor("sox_sample_16k.wav")
 	if err != nil {
 		t.Fail()
 	}
@@ -127,11 +127,11 @@ func TestComputeSpectrogram(t *testing.T) {
 
 func TestRenderImage(t *testing.T) {
 	s := op.NewScope()
-	filePathTensor, err := tf.NewTensor("sox_up.wav")
+	filePathTensor, err := tf.NewTensor("sox_up_16k.wav")
 	if err != nil {
 		t.Fail()
 	}
-	sampleRateTensor, err := tf.NewTensor(int32(44100))
+	sampleRateTensor, err := tf.NewTensor(int32(16000))
 	if err != nil {
 		t.Fail()
 	}
@@ -193,7 +193,7 @@ func TestBytesToBytes1(t *testing.T) {
 		t.Fail()
 	}
 
-	wavBytes, err = ioutil.ReadFile("sox_up.wav")
+	wavBytes, err = ioutil.ReadFile("sox_up_16k.wav")
 	if err != nil {
 		logger.Fatalln(err)
 	}
@@ -213,14 +213,14 @@ func TestBytesToBytes2(t *testing.T) {
 	specgramOP, sampleRatePH := ComputeMFCC(s, pcm)
 	jpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), specgramOP) // render image
 
-	sampleRateTensor, err := tf.NewTensor(int32(44100))
+	sampleRateTensor, err := tf.NewTensor(int32(16000))
 	if err != nil {
 		t.Fail()
 	}
 	feeds := map[tf.Output]*tf.Tensor{sampleRatePH: sampleRateTensor}
 	renderImage := BytesToBytes(s, wavBytesPH, jpegBytesOP, feeds)
 
-	wavBytes, err := ioutil.ReadFile("sox_sample.wav")
+	wavBytes, err := ioutil.ReadFile("sox_sample_16k.wav")
 	if err != nil {
 		logger.Fatalln(err)
 	}
@@ -233,7 +233,7 @@ func TestBytesToBytes2(t *testing.T) {
 		t.Fail()
 	}
 
-	wavBytes, err = ioutil.ReadFile("sox_up.wav")
+	wavBytes, err = ioutil.ReadFile("sox_up_16k.wav")
 	if err != nil {
 		logger.Fatalln(err)
 	}
@@ -253,14 +253,14 @@ func TestBytesToBytesConcurrent(t *testing.T) {
 	specgramOP, sampleRatePH := ComputeMFCC(s, pcm)
 	specgramJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), specgramOP) // render image of spectrogram.
 
-	sampleRateTensor, err := tf.NewTensor(int32(44100))
+	sampleRateTensor, err := tf.NewTensor(int32(16000))
 	if err != nil {
 		t.Fail()
 	}
 	feeds := map[tf.Output]*tf.Tensor{sampleRatePH: sampleRateTensor}
 	renderImage := BytesToBytes(s, wavBytesPH, specgramJpegBytesOP, feeds)
 
-	wavBytes, err := ioutil.ReadFile("sox_sample.wav")
+	wavBytes, err := ioutil.ReadFile("sox_sample_16k.wav")
 	if err != nil {
 		logger.Fatalln(err)
 	}
@@ -287,12 +287,12 @@ func TestBytesToBytesConcurrent(t *testing.T) {
 }
 
 func TestMakeCleanWav(t *testing.T){
-	cleanWav, err := MakeCleanWav(44100)
+	cleanWav, err := MakeCleanWav(16000)
 	if err != nil {
 		logger.Println(err)
 		t.Fail()
 	}
-	wavBytes, err := ioutil.ReadFile("sox_sample.wav")
+	wavBytes, err := ioutil.ReadFile("sox_sample_16k.wav")
 	if err != nil {
 		logger.Fatalln(err)
 		t.Fail()
@@ -317,7 +317,7 @@ func TestMakeCleanWav(t *testing.T){
 	}
 	_, err = cleanWav(wavBytes)
 	if err == nil {
-		logger.Println(err)
+		logger.Println("did not fail")
 		t.Fail()
 	}
 	if err == nil {

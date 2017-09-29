@@ -1,3 +1,4 @@
+// Package tfutils provides various functions usefull when constructing TensorFlow compute graphs.
 package tfutils
 
 import (
