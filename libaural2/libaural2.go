@@ -1,8 +1,10 @@
+// Package libaural2 provides libs share betwene edge, server and browser.
 package libaural2
 
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/gob"
 
 	"github.com/lucasb-eyer/go-colorful"
@@ -14,6 +16,38 @@ const Duration int = 10
 
 // SampleRate of audio
 const SampleRate int = 16000
+
+// StrideWidth is the number of samples in one stride
+const StrideWidth int = 500
+
+// SamplePerClip is the number of samples in each clip
+const SamplePerClip int = SampleRate * Duration
+
+// StridesPerClip is the number of strides per clip
+const StridesPerClip int = SamplePerClip / StrideWidth
+
+// AudioClipLen is the number of bytes in one audio clip
+const AudioClipLen int = SamplePerClip * 2
+
+// AudioClip stores a `Duration` second clip of int16 raw audio
+type AudioClip [AudioClipLen]byte
+
+// ID computes the hash of the audio clip
+func (rawBytes *AudioClip) ID() ClipID {
+	return sha256.Sum256(rawBytes[:])
+}
+
+// ClipID is the hash of a clip of raw audio
+type ClipID [32]byte
+
+// FSsafeString returns an encoding of the ClipID safe to filesystems and URLs.
+func (hash ClipID) FSsafeString() string {
+	return base32.StdEncoding.EncodeToString(hash[:])
+}
+
+func (hash ClipID) String() string {
+	return urbitname.Encode(hash[0:4])
+}
 
 // Cmd is one Cmd
 type Cmd int
@@ -30,22 +64,15 @@ func (cmd Cmd) RGBA() (r, g, b, a uint32) {
 	return classColor.RGBA()
 }
 
-// SampleID is the hash of the wav file
-type SampleID []byte
-
-func (hash SampleID) String() string {
-	return urbitname.Encode(hash[0:4])
-}
-
 // Label is one label in time
 type Label struct {
 	Cmd  Cmd
 	Time float64 // the duration since the start of the clip.
 }
 
-// LabelSet is the set of labels for one sample
+// LabelSet is the set of labels for one Clip
 type LabelSet struct {
-	ID     SampleID
+	ID     ClipID
 	Labels []Label
 }
 

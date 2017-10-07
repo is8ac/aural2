@@ -18,7 +18,7 @@ func TestNumericLookup(t *testing.T) {
 func TestSerialize(t *testing.T) {
 	hash := sha256.Sum256([]byte("some fake raw data"))
 	labelSet := LabelSet{
-		ID: hash[:],
+		ID: hash,
 		Labels: []Label{
 			Label{
 				Cmd:  Yes,
