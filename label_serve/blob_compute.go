@@ -13,7 +13,6 @@ import (
 
 func getAudioClipFromFS(id libaural2.ClipID) (audioClip *libaural2.AudioClip, err error) {
 	rawBytes, err := ioutil.ReadFile("audio/" + id.FSsafeString() + ".raw")
-	//rawBytes, err := ioutil.ReadFile("/tmp/raw_cmd_10.raw")
 	if len(rawBytes) != len(audioClip) {
 		err = errors.New("Got " + strconv.Itoa(len(rawBytes)) + " bytes, expected" + strconv.Itoa(len(audioClip)))
 		return
@@ -25,7 +24,7 @@ func getAudioClipFromFS(id libaural2.ClipID) (audioClip *libaural2.AudioClip, er
 
 
 func makeAddRIFF()(addRIFF func(*libaural2.AudioClip)([]byte), err error){
-  headerString := "5249464644b3040057415645666d74201000000001000100803e0000007d0000020010006461746120b30400"
+	headerString := "5249464624e2040057415645666d74201000000001000100803e0000007d0000020010006461746100e20400"
   header, err := hex.DecodeString(headerString)
   if err != nil {
 		panic(err)
