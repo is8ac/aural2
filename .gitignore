@@ -2,6 +2,14 @@ logs/
 models/
 data/
 
+*.wav
+*.ogg
+*.raw
+*.jpeg
+*.db
+*.js
+*.js.map
+label_serve/audio/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
