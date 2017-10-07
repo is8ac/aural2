@@ -180,6 +180,7 @@ func main() {
 	if err != nil {
 		logger.Fatalln(err)
 	}
+	// make some function that take *libaural2.AudioClip and return a []byte
 	computeWav, err := makeAddRIFF()
 	if err != nil {
 		logger.Fatalln(err)
@@ -194,6 +195,7 @@ func main() {
 	}
 	defer close()
 	r := mux.NewRouter()
+	// with makeServeBlob(), we convert the blob conversion func into a request handler.
 	r.HandleFunc("/images/spectrogram/{sampleID}.jpeg", makeServeBlob(renderSpectrogram))
 	r.HandleFunc("/images/mfcc/{sampleID}.jpeg", makeServeBlob(renderMFCC))
 	r.HandleFunc("/audio/{sampleID}.wav", makeServeBlob(computeWav))
