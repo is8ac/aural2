@@ -191,16 +191,3 @@ func BytesToBytes(s *op.Scope, inputPH, outputOP tf.Output, feeds map[tf.Output]
 	}
 	return
 }
-
-// LabelsToTensor converts a slice of labels to 1d tensor of labels
-func LabelsToTensor(labels []libaural2.Label) (tensor *tf.Tensor) {
-	vector := make([]int32, libaural2.StridesPerClip)
-	for _, label := range labels {
-		vector[int(label.Time*float64(libaural2.SampleRate/libaural2.StrideWidth))] = int32(label.Cmd)
-	}
-	tensor, err := tf.NewTensor(vector)
-	if err != nil {
-		logger.Fatalln(err)
-	}
-	return
-}

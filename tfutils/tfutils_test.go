@@ -416,27 +416,3 @@ func TestMakeCleanWav(t *testing.T) {
 		t.Fail()
 	}
 }
-
-func TestLabelsToVector(t *testing.T) {
-	labels := []libaural2.Label{
-		libaural2.Label{
-			Cmd:  libaural2.True,
-			Time: 2.34,
-		},
-		libaural2.Label{
-			Cmd:  libaural2.False,
-			Time: 6.34,
-		},
-		libaural2.Label{
-			Cmd:  libaural2.Yes,
-			Time: 0.90,
-		},
-	}
-	tensor := LabelsToTensor(labels)
-	if tensor.DataType() != tf.Int32 {
-		t.Fail()
-	}
-	if len(tensor.Shape()) != 1 {
-		t.Fail()
-	}
-}

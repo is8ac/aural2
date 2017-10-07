@@ -74,6 +74,12 @@ func (cmd Cmd) String() string {
 	return CmdToString[cmd]
 }
 
+// ToOutput convert a Cmd to the onehot encoded output
+func (cmd Cmd) ToOutput() (output Output) {
+	output[cmd] = 1
+	return
+}
+
 // RGBA implements the color.Color interface
 func (cmd Cmd) RGBA() (r, g, b, a uint32) {
 	hash := sha256.Sum256([]byte{uint8(cmd)})
@@ -94,11 +100,20 @@ type LabelSet struct {
 	Labels []Label
 }
 
+// ToOutputSet converts the labelSet to an OutputSet
+func (labels *LabelSet) ToOutputSet() (output *OutputSet) {
+	output = &OutputSet{}
+	for _, label := range labels.Labels {
+		output[int(label.Time*float64(SampleRate/StrideWidth))] = label.Cmd.ToOutput()
+	}
+	return
+}
+
 // Serialize converts a LabelSet to []byte
-func (labelSet *LabelSet) Serialize() (serialized []byte, err error) {
+func (labels *LabelSet) Serialize() (serialized []byte, err error) {
 	buf := bytes.Buffer{}
 	gobEnc := gob.NewEncoder(&buf)
-	if err = gobEnc.Encode(labelSet); err != nil {
+	if err = gobEnc.Encode(labels); err != nil {
 		return
 	}
 	serialized = buf.Bytes()
