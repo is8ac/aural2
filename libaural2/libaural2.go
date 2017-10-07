@@ -29,6 +29,24 @@ const StridesPerClip int = SamplePerClip / StrideWidth
 // AudioClipLen is the number of bytes in one audio clip
 const AudioClipLen int = SamplePerClip * 2
 
+// InputSize is the length of the input vector, currently one MFCC
+const InputSize int = 13
+
+// OutputSize is the number of commands. Increase when adding new Cmds!
+const OutputSize int = 31
+
+// Input is the one input to the LSTM
+type Input [InputSize]float32
+
+// InputSet is the set of inputs for one clip.
+type InputSet [StridesPerClip]Input
+
+// Output is one output, the onehot array of Cmds.
+type Output [StridesPerClip]float32
+
+// OutputSet is the set of outputs for one clip.
+type OutputSet [StridesPerClip]Output
+
 // AudioClip stores a `Duration` second clip of int16 raw audio
 type AudioClip [AudioClipLen]byte
 
