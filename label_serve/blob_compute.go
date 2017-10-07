@@ -23,20 +23,19 @@ func getAudioClipFromFS(id libaural2.ClipID) (audioClip *libaural2.AudioClip, er
 }
 
 
-func makeAddRIFF()(addRIFF func(*libaural2.AudioClip)([]byte), err error){
+func makeAddRIFF()(addRIFF func(*libaural2.AudioClip)([]byte, error), err error){
 	headerString := "5249464624e2040057415645666d74201000000001000100803e0000007d0000020010006461746100e20400"
   header, err := hex.DecodeString(headerString)
   if err != nil {
-		panic(err)
     return
   }
-  addRIFF = func(audioClip *libaural2.AudioClip)[]byte{
-    return append(header, audioClip[:]...)
+  addRIFF = func(audioClip *libaural2.AudioClip)([]byte, error){
+    return append(header, audioClip[:]...), nil
   }
   return
 }
 
-func makeComputeSpectrogram() (computeSpectrogram func(*libaural2.AudioClip) ([]byte, error), err error) {
+func makeRenderSpectrogram() (renderSpectrogram func(*libaural2.AudioClip) ([]byte, error), err error) {
 	s := op.NewScope()
 	bytesPH, pcm := tfutils.ParseRawBytesToPCM(s)
 	specgramOP := tfutils.ComputeSpectrogram(s.SubScope("spectrogram"), pcm, 0, 0)
@@ -47,7 +46,7 @@ func makeComputeSpectrogram() (computeSpectrogram func(*libaural2.AudioClip) ([]
 		return
 	}
 
-	computeSpectrogram = func(raw *libaural2.AudioClip) (imageBytes []byte, err error) {
+	renderSpectrogram = func(raw *libaural2.AudioClip) (imageBytes []byte, err error) {
 		if raw == nil {
 			err = errors.New("raw is nil")
 			return
@@ -62,7 +61,7 @@ func makeComputeSpectrogram() (computeSpectrogram func(*libaural2.AudioClip) ([]
 	return
 }
 
-func makeComputeMFCC() (computeMFCC func(*libaural2.AudioClip) ([]byte, error), err error) {
+func makeRenderMFCC() (renderMFCC func(*libaural2.AudioClip) ([]byte, error), err error) {
 	s := op.NewScope()
 	bytesPH, pcm := tfutils.ParseRawBytesToPCM(s)
 	mfccOP, sampleRatePH := tfutils.ComputeMFCC(s.SubScope("spectrogram"), pcm)
@@ -76,7 +75,7 @@ func makeComputeMFCC() (computeMFCC func(*libaural2.AudioClip) ([]byte, error), 
 	if err != nil {
 		return
 	}
-	computeMFCC = func(raw *libaural2.AudioClip) (imageBytes []byte, err error) {
+	renderMFCC = func(raw *libaural2.AudioClip) (imageBytes []byte, err error) {
 		if raw == nil {
 			err = errors.New("raw is nil")
 			return

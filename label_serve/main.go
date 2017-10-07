@@ -30,75 +30,25 @@ func parseURLvar(urlVar string) (clipID libaural2.ClipID, err error) {
 	return
 }
 
-func makeServeMFCC() func(http.ResponseWriter, *http.Request) {
-	renderImage, err := makeComputeMFCC()
-	if err != nil {
-		logger.Fatal(err)
-	}
+func makeServeBlob(clipToBlob func(*libaural2.AudioClip) ([]byte, error)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		audioIDstring := mux.Vars(r)["sampleID"]
 		clipID, err := parseURLvar(audioIDstring)
+		if err != nil {
+			logger.Println(err)
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
 		audioClip, err := getAudioClipFromFS(clipID)
 		if err != nil {
 			logger.Println(err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
-		imageBytes, err := renderImage(audioClip)
-		if err != nil {
-			logger.Println(err)
-			http.Error(w, "", http.StatusInternalServerError)
-			return
-		}
-
-		w.Write([]byte(imageBytes))
-	}
-}
-
-func makeServeSpectrogram() func(http.ResponseWriter, *http.Request) {
-	renderImage, err := makeComputeSpectrogram()
-	if err != nil {
-		logger.Fatalln(err)
-	}
-	return func(w http.ResponseWriter, r *http.Request) {
-		audioIDstring := mux.Vars(r)["sampleID"]
-		clipID, err := parseURLvar(audioIDstring)
-		audioClip, err := getAudioClipFromFS(clipID)
-		if err != nil {
-			logger.Println(err)
-			http.Error(w, "", http.StatusInternalServerError)
-			return
-		}
-		imageBytes, err := renderImage(audioClip)
-		if err != nil {
-			logger.Println(err)
-			http.Error(w, "", http.StatusInternalServerError)
-			return
-		}
-		w.Write([]byte(imageBytes))
-	}
-}
-
-func makeServeWav() func(http.ResponseWriter, *http.Request) {
-	addRiff, err := makeAddRIFF()
-	if err != nil {
-		logger.Fatalln(err)
-	}
-	return func(w http.ResponseWriter, r *http.Request) {
-		audioIDstring := mux.Vars(r)["sampleID"]
-		clipID, err := parseURLvar(audioIDstring)
-		audioClip, err := getAudioClipFromFS(clipID)
-		if err != nil {
-			logger.Println(err)
-			http.Error(w, "", http.StatusInternalServerError)
-			return
-		}
-		wavBytes := addRiff(audioClip)
-		logger.Println(len(wavBytes))
-		w.Header().Set("Content-Type", "audio/x-wav")
-		w.Header().Set("Content-Length", strconv.Itoa(len(wavBytes)))
+		blobBytes, err := clipToBlob(audioClip)
+		w.Header().Set("Content-Length", strconv.Itoa(len(blobBytes)))
 		w.Header().Set("Accept-Ranges", "bytes")
-		w.Write(wavBytes)
+		w.Write(blobBytes)
 	}
 }
 
@@ -222,7 +172,7 @@ func makeSampleHandler() func(http.ResponseWriter, *http.Request) {
 
 var logger = log.New(os.Stdout, "ts_vis: ", log.Lshortfile|log.LUTC|log.Ltime|log.Ldate)
 
-const version = "0.2.1"
+const version = "0.2.2"
 
 func main() {
 	logger.Println("Audio viz server version " + version)
@@ -230,11 +180,23 @@ func main() {
 	if err != nil {
 		logger.Fatalln(err)
 	}
+	computeWav, err := makeAddRIFF()
+	if err != nil {
+		logger.Fatalln(err)
+	}
+	renderMFCC, err := makeRenderMFCC()
+	if err != nil {
+		logger.Fatalln(err)
+	}
+	renderSpectrogram, err := makeRenderSpectrogram()
+	if err != nil {
+		logger.Fatalln(err)
+	}
 	defer close()
 	r := mux.NewRouter()
-	r.HandleFunc("/images/spectrogram/{sampleID}", makeServeSpectrogram())
-	r.HandleFunc("/audio/{sampleID}.wav", makeServeWav())
-	r.HandleFunc("/images/mfcc/{sampleID}", makeServeMFCC())
+	r.HandleFunc("/images/spectrogram/{sampleID}.jpeg", makeServeBlob(renderSpectrogram))
+	r.HandleFunc("/images/mfcc/{sampleID}.jpeg", makeServeBlob(renderMFCC))
+	r.HandleFunc("/audio/{sampleID}.wav", makeServeBlob(computeWav))
 	r.HandleFunc("/tagui/{sampleID}", makeServeTagUI())
 	r.HandleFunc("/labelsset/{sampleID}", makeWriteLabelsSet(put)).Methods("POST")
 	r.HandleFunc("/labelsset/{sampleID}", makeServeLabelsSet(get)).Methods("GET")
