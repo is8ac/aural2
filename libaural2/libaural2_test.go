@@ -18,7 +18,7 @@ func TestNumericLookup(t *testing.T) {
 func TestSerialize(t *testing.T) {
 	hash := sha256.Sum256([]byte("some fake raw data"))
 	labelSet := LabelSet{
-		ID: hash[:],
+		ID: hash,
 		Labels: []Label{
 			Label{
 				Cmd:  Yes,
@@ -41,4 +41,35 @@ func TestSerialize(t *testing.T) {
 	if !bytes.Equal(serialized, serialized2) {
 		t.Fail()
 	}
+}
+
+func TestToOutputSet(t *testing.T) {
+	hash := sha256.Sum256([]byte("some fake raw data"))
+	labelSet := LabelSet{
+		ID: hash,
+		Labels: []Label{
+			Label{
+				Cmd:  Yes,
+				Time: 1.23,
+			},
+			Label{
+				Cmd:  Yes,
+				Time: 8.23,
+			},
+			Label{
+				Cmd:  Yes,
+				Time: 2.00,
+			},
+			Label{
+				Cmd:  Yes,
+				Time: 1,
+			},
+			Label{
+				Cmd:  Yes,
+				Time: 9.4,
+			},
+		},
+	}
+	outputSet := labelSet.ToOutputSet()
+	_ = outputSet
 }

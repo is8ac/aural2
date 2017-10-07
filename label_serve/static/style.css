@@ -29,13 +29,6 @@ body {
   width: 100%;
 }
 
-#timeline {
-  height: 100%;
-  width: 200%;
-  position: relative;
-  left: 0px;
-}
-
 #curser{
   width: 3px;
   height: 100%;
@@ -44,8 +37,20 @@ body {
 }
 
 #spectrogram{
-  height: 50%;
+  margin-bottom: 10px;
+  height: 70%;
 }
 #mfcc{
   height: 10%;
+}
+
+.label{
+  width: 5px;
+  height: 10%;
+  position: absolute;
+}
+
+.cmd_label{
+  position: relative;
+  left: -40px;
 }

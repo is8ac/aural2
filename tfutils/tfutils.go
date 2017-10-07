@@ -9,8 +9,12 @@ import (
 	"sync"
 
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
+	"github.ibm.com/Blue-Horizon/aural2/libaural2"
+
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 )
+
+const strideWidth int = 512
 
 var logger = log.New(os.Stdout, "tfutils: ", log.Lshortfile)
 
@@ -30,6 +34,24 @@ func ParseWavBytesToPCM(s *op.Scope) (wavBytes, pcm tf.Output) {
 	multiChanPCM, _ := op.DecodeWav(s.SubScope("decode_wav"), wavBytes)              // decode the wav file into PCM. The first dimension is time, the second is channels.
 	channels := op.Unpack(s.SubScope("channels"), multiChanPCM, 1, op.UnpackAxis(1)) // unpack the channels.
 	pcm = channels[0]                                                                // we only want the first channel
+	return
+}
+
+// ParseRawBytesToPCM returns a placeholder for []byte of an int16le raw file, and an output for float PCM
+func ParseRawBytesToPCM(s *op.Scope) (rawBytes, pcm tf.Output) {
+	rawBytes = op.Placeholder(s.SubScope("raw_bytes"), tf.String)
+	int16PCM := op.DecodeRaw(s.SubScope("decode_raw"), rawBytes, tf.Int16)
+	floats := op.Cast(s.SubScope("cast"), int16PCM, tf.Float)
+	pcm = op.Div(s.SubScope("rescale"), floats, op.Const(s.SubScope("16pow"), float32(65536)))
+	return
+}
+
+// EncodeWav encodes pcm to wav file
+func EncodeWav(s *op.Scope, pcmOutput tf.Output) (wavBytesOutput, sampleRatePH tf.Output) {
+	dim := op.Const(s.SubScope("dim"), int32(1))
+	sampleRatePH = op.Placeholder(s.SubScope("sample_rate"), tf.Int32)
+	expanded := op.ExpandDims(s.SubScope("expand_dims"), pcmOutput, dim)
+	wavBytesOutput = op.EncodeWav(s.SubScope("encode_wav"), expanded, sampleRatePH)
 	return
 }
 
@@ -98,7 +120,7 @@ func ComputeMFCC(s *op.Scope, pcm tf.Output) (mfcc, sampleRatePH tf.Output) {
 	spectrogram := op.AudioSpectrogram(s.SubScope("spectrogram"),      // Compute the spectrogram
 		expanded,
 		1024, // window size
-		1024, // stride size
+		int64(libaural2.StrideWidth),              // stride size
 		op.AudioSpectrogramMagnitudeSquared(true), // square the magnitude
 	)
 	mfccs := op.Mfcc(s.SubScope("mfcc"), spectrogram, sampleRatePH)         // compute the mfcc
@@ -110,7 +132,7 @@ func ComputeMFCC(s *op.Scope, pcm tf.Output) (mfcc, sampleRatePH tf.Output) {
 func ComputeSpectrogram(s *op.Scope, pcm tf.Output, freqMin, freqBuf int) (slice tf.Output) {
 	dim := op.Const(s.SubScope("dim"), int32(1))
 	expanded := op.ExpandDims(s.SubScope("expand_dims"), pcm, dim) // again, make AudioSpectrogram happy.
-	spectrograms := op.AudioSpectrogram(s.SubScope("spectrogram"), expanded, 1024, 1024)
+	spectrograms := op.AudioSpectrogram(s.SubScope("spectrogram"), expanded, 1024, int64(strideWidth))
 	invertedSpectrogram := op.Unpack(s.SubScope("channels"), spectrograms, 1, op.UnpackAxis(0))[0] // and remove the unnecessary dimension
 	reverse := op.Reverse(s.SubScope("reverse"), invertedSpectrogram, op.Const(s.SubScope("reverse_dim"), []bool{false, true}))
 
@@ -139,7 +161,7 @@ func RenderImage(s *op.Scope, values tf.Output) (jpegBytes tf.Output) {
 
 // BytesToBytes takes a scope, a placeholder for a []byte, and an output of []byte and returns a `func([]byte)[]byte`.
 // feeds may be an empty map, or it may be populated with whatever special feeds your graph needs.
-func BytesToBytes(s *op.Scope, inputPH, outputOP tf.Output, feeds map[tf.Output]*tf.Tensor) (conversionFunc func([]byte) ([]byte, error)) {
+func BytesToBytes(s *op.Scope, inputPH, outputOP tf.Output, feeds map[tf.Output]*tf.Tensor) (conversionFunc func([]byte) ([]byte, error), err error) {
 	graph, err := s.Finalize() // finalize the scope to get the graph
 	if err != nil {
 		logger.Println(err)
@@ -156,7 +178,7 @@ func BytesToBytes(s *op.Scope, inputPH, outputOP tf.Output, feeds map[tf.Output]
 		if err != nil {
 			return
 		}
-		mutex.Lock()
+		mutex.Lock()                 // tf.Session is thread safe, the mutex is only needed to keep the feeds safe.
 		feeds[inputPH] = inputTensor // add inputPH and inputTensor to feeds.
 		result, err := sess.Run(feeds, []tf.Output{outputOP}, nil)
 		if err != nil {
