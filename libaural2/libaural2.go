@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base32"
+	"encoding/binary"
 	"encoding/gob"
+	"fmt"
 
 	"github.com/lucasb-eyer/go-colorful"
 	"github.ibm.com/ifleonar/mu/urbitname"
@@ -33,7 +35,7 @@ const AudioClipLen int = SamplePerClip * 2
 const InputSize int = 13
 
 // OutputSize is the number of commands. Increase when adding new Cmds!
-const OutputSize int = 31
+const OutputSize int = 40
 
 // Input is the one input to the LSTM
 type Input [InputSize]float32
@@ -42,10 +44,24 @@ type Input [InputSize]float32
 type InputSet [StridesPerClip]Input
 
 // Output is one output, the onehot array of Cmds.
-type Output [StridesPerClip]float32
+type Output [OutputSize]float32
 
 // OutputSet is the set of outputs for one clip.
 type OutputSet [StridesPerClip]Output
+
+// Serialize converts an outputSet to a []bytes
+func (outputSet *OutputSet) Serialize() (serialized []byte) {
+	buf := new(bytes.Buffer)
+	var count int
+	for _, output := range outputSet {
+		for _, cmdVal := range output {
+			binary.Write(buf, &binary.LittleEndian, cmdVal)
+		}
+	}
+	fmt.Println("count", count*4)
+	serialized = buf.Bytes()
+	return
+}
 
 // AudioClip stores a `Duration` second clip of int16 raw audio
 type AudioClip [AudioClipLen]byte
