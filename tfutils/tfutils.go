@@ -14,8 +14,6 @@ import (
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 )
 
-const strideWidth int = 512
-
 var logger = log.New(os.Stdout, "tfutils: ", log.Lshortfile)
 
 // ReadWaveToPCM returns a placeholder for a filepath to an int16le wav file, and an output for float PCM
@@ -132,7 +130,7 @@ func ComputeMFCC(s *op.Scope, pcm tf.Output) (mfcc, sampleRatePH tf.Output) {
 func ComputeSpectrogram(s *op.Scope, pcm tf.Output, freqMin, freqBuf int) (slice tf.Output) {
 	dim := op.Const(s.SubScope("dim"), int32(1))
 	expanded := op.ExpandDims(s.SubScope("expand_dims"), pcm, dim) // again, make AudioSpectrogram happy.
-	spectrograms := op.AudioSpectrogram(s.SubScope("spectrogram"), expanded, 1024, int64(strideWidth))
+	spectrograms := op.AudioSpectrogram(s.SubScope("spectrogram"), expanded, 1024, int64(libaural2.StrideWidth))
 	invertedSpectrogram := op.Unpack(s.SubScope("channels"), spectrograms, 1, op.UnpackAxis(0))[0] // and remove the unnecessary dimension
 	reverse := op.Reverse(s.SubScope("reverse"), invertedSpectrogram, op.Const(s.SubScope("reverse_dim"), []bool{false, true}))
 
@@ -189,5 +187,41 @@ func BytesToBytes(s *op.Scope, inputPH, outputOP tf.Output, feeds map[tf.Output]
 		outputBytes = []byte(result[0].Value().(string))
 		return
 	}
+	return
+}
+
+// EmbedTrainingData returns a GrapDef with the inputs and outputs embeded
+// inputs must be of shape [len, libaural2.StridesPerClip, libaural2.InputSize]
+// outputs must be of shape [len, libaural2.StridesPerClip]
+// where len is the same for inputs, outputs, and ids.
+func EmbedTrainingData(inputs [][][]float32, outputs [][libaural2.StridesPerClip]int32, ids []libaural2.ClipID) (graph *tf.Graph, err error) {
+	if len(inputs) != len(outputs) || len(ids) != len(inputs) {
+		err = errors.New("input, output, or ids len do not match")
+		return
+	}
+	if len(inputs) == 0 {
+		err = errors.New("must be given more then 0 clips")
+		return
+	}
+	if len(inputs[0]) != libaural2.StridesPerClip {
+		err = errors.New("input has wrong StridesPerClip")
+		return
+	}
+	if len(outputs[0]) != libaural2.StridesPerClip {
+		err = errors.New("output has wrong StridesPerClip")
+		return
+	}
+	if len(inputs[0][0]) != libaural2.InputSize {
+		err = errors.New("bad InputSize")
+		return
+	}
+	s := op.NewScope()
+	inputsConst := op.Const(s.SubScope("consts"), inputs)
+	outputsConst := op.Const(s.SubScope("consts"), outputs)
+	idsConst := op.Const(s.SubScope("clip_hashes"), ids)
+	_ = op.Identity(s.SubScope("inputs"), inputsConst) // we use identity so that output names stay constant when changing the inner workings.
+	_ = op.Identity(s.SubScope("outputs"), outputsConst)
+	_ = idsConst
+	graph, err = s.Finalize()
 	return
 }

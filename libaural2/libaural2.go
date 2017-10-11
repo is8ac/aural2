@@ -20,7 +20,7 @@ const Duration int = 10
 const SampleRate int = 16000
 
 // StrideWidth is the number of samples in one stride
-const StrideWidth int = 500
+const StrideWidth int = 1024
 
 // SamplePerClip is the number of samples in each clip
 const SamplePerClip int = SampleRate * Duration
@@ -36,6 +36,12 @@ const InputSize int = 13
 
 // OutputSize is the number of commands. Increase when adding new Cmds!
 const OutputSize int = 40
+
+// BatchSize is the size of the one batch
+const BatchSize int = 2
+
+// CmdList is a list of Cmds
+type CmdList [StridesPerClip]Cmd
 
 // Input is the one input to the LSTM
 type Input [InputSize]float32
@@ -116,6 +122,14 @@ type LabelSet struct {
 	Labels []Label
 }
 
+// ToCmdArray converts the labelSet to a slice of Cmds IDs
+func (labels *LabelSet) ToCmdArray() (cmdArray [StridesPerClip]int32) {
+	for _, label := range labels.Labels {
+		cmdArray[int(label.Time*float64(SampleRate/StrideWidth))] = int32(label.Cmd)
+	}
+	return
+}
+
 // ToOutputSet converts the labelSet to an OutputSet
 func (labels *LabelSet) ToOutputSet() (output *OutputSet) {
 	output = &OutputSet{}
@@ -179,6 +193,8 @@ const (
 	Different
 	When
 	Who
+	OKgoogle
+	Alexa
 )
 
 // CmdToString converts a cmd to the cmds name.
@@ -215,6 +231,8 @@ var CmdToString = map[Cmd]string{
 	Different: "Different",
 	When:      "When",
 	Who:       "Who",
+	OKgoogle:  "OKgoogle",
+	Alexa:     "Alexa",
 }
 
 // IsNumeric is a map of Cmds that are numeric.

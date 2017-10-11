@@ -1,118 +1,235 @@
-# descended from https://github.com/sherjilozair/char-rnn-tensorflow
-from __future__ import print_function
-import tensorflow as tf
-from tensorflow.python.framework import graph_util
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
 import argparse
-import time
+import codecs
+import json
+import logging
 import os
-from six.moves import cPickle
+import shutil
+import sys
 
-from utils import TextLoader
-from model import Model
+from tensorflow.python.framework import graph_util
+import numpy as np
+from model import *
+from six import iteritems
+import time
 
 
 def main():
-    parser = argparse.ArgumentParser(
-                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--data_dir', type=str, default='data/tinyshakespeare',
-                        help='data directory containing input.txt')
-    parser.add_argument('--save_dir', type=str, default='save',
-                        help='directory to store checkpointed models')
-    parser.add_argument('--log_dir', type=str, default='logs',
-                        help='directory to store tensorboard logs')
-    parser.add_argument('--rnn_size', type=int, default=128,
-                        help='size of RNN hidden state')
-    parser.add_argument('--num_layers', type=int, default=3,
-                        help='number of layers in the RNN')
-    parser.add_argument('--model', type=str, default='lstm',
-                        help='rnn, gru, lstm, or nas')
-    parser.add_argument('--batch_size', type=int, default=100,
-                        help='minibatch size')
-    parser.add_argument('--seq_length', type=int, default=47,
-                        help='RNN sequence length')
-    parser.add_argument('--num_epochs', type=int, default=50,
+    start_time = time.time()
+    parser = argparse.ArgumentParser()
+
+    # Parameters for saving models.
+    parser.add_argument('--output_dir', type=str, default='output',
+                        help=('directory to store final and'
+                              ' intermediate results and models.'))
+    parser.add_argument('--n_save', type=int, default=1,
+                        help='how many times to save the model during each epoch.')
+    parser.add_argument('--max_to_keep', type=int, default=5,
+                        help='how many recent models to keep.')
+
+
+    # Parameters to control the training.
+    parser.add_argument('--num_epochs', type=int, default=10,
                         help='number of epochs')
-    parser.add_argument('--save_every', type=int, default=100,
-                        help='save frequency')
-    parser.add_argument('--grad_clip', type=float, default=5.,
-                        help='clip gradients at this value')
-    parser.add_argument('--learning_rate', type=float, default=0.002,
-                        help='learning rate')
-    parser.add_argument('--decay_rate', type=float, default=0.97,
-                        help='decay rate for rmsprop')
-    parser.add_argument('--output_keep_prob', type=float, default=1.0,
-                        help='probability of keeping weights in the hidden layer')
-    parser.add_argument('--input_keep_prob', type=float, default=1.0,
-                        help='probability of keeping weights in the input layer')
-    parser.add_argument('--init_from', type=str, default=None,
-                        help="""continue training from saved model at this path. Path must contain files saved by previous training process:
-                            'config.pkl'        : configuration;
-                            'chars_vocab.pkl'   : vocabulary definitions;
-                            'checkpoint'        : paths to model file(s) (created by tf).
-                                                  Note: this file contains absolute paths, be careful when moving files around;
-                            'model.ckpt-*'      : file(s) with model definition (created by tf)
-                        """)
+    parser.add_argument('--batch_size', type=int, default=6,
+                        help='minibatch size')
+    # test_frac is computed as (1 - train_frac - valid_frac).
+    parser.add_argument('--dropout', type=float, default=0.0,
+                        help='dropout rate, default to 0 (no dropout).')
+
+    parser.add_argument('--input_dropout', type=float, default=0.0,
+                        help=('dropout rate on input layer, default to 0 (no dropout),'
+                              'and no dropout if using one-hot representation.'))
+
+
+    # Parameters for logging.
+    parser.add_argument('--log_to_file', dest='log_to_file', action='store_true',
+                        help=('whether the experiment log is stored in a file under'
+                              '  output_dir or printed at stdout.'))
+    parser.set_defaults(log_to_file=False)
+
+    parser.add_argument('--progress_freq', type=int,
+                        default=100,
+                        help=('frequency for progress report in training'
+                              ' and evalution.'))
+
+    parser.add_argument('--verbose', type=int,
+                        default=0,
+                        help=('whether to show progress report in training'
+                              ' and evalution.'))
+
+
+    # Parameters for unittesting the implementation.
+    parser.add_argument('--test', dest='test', action='store_true',
+                        help=('use the first 1000 character to as data'
+                              ' to test the implementation'))
+    parser.set_defaults(test=False)
+
     args = parser.parse_args()
-    train(args)
 
-
-def train(args):
-    data_loader = TextLoader(args.data_dir, args.batch_size, args.seq_length)
-    args.vocab_size = data_loader.vocab_size
-    print("vocab_size:", data_loader.vocab_size)
-
-
-    if not os.path.isdir(args.save_dir):
-        os.makedirs(args.save_dir)
-    with open(os.path.join(args.save_dir, 'config.pkl'), 'wb') as f:
-        cPickle.dump(args, f)
-    with open(os.path.join(args.save_dir, 'chars_vocab.pkl'), 'wb') as f:
-        cPickle.dump((data_loader.chars, data_loader.vocab), f)
-
-    model = Model(args) # create the model
-
+    print("creating data loading sess at", time.time() - start_time)
     with tf.Session() as sess:
-        # instrument for tensorboard
-        summaries = tf.summary.merge_all()
-        writer = tf.summary.FileWriter(os.path.join(args.log_dir, time.strftime("%Y-%m-%d-%H-%M-%S")))
-        writer.add_graph(sess.graph)
+        graph_def = tf.GraphDef()
+        graph_path = 'trainingdata.pb'
+        with open(graph_path, "rb") as f:
+            proto_b = f.read()
+            graph_def.ParseFromString(proto_b)
+        ops = tf.import_graph_def(graph_def, name="training_data", return_elements=["inputs/Identity:0", "outputs/Identity:0", "clip_hashes/Const:0"])
+        #print(ops)
+        (inputs, outputs, hashes) = sess.run(ops)
+    print(inputs.shape, outputs.shape)
+    print("got data at", time.time() - start_time)
 
-        sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver(tf.global_variables())
-        # restore model
-        if args.init_from is not None:
-            saver.restore(sess, ckpt.model_checkpoint_path)
-        for e in range(args.num_epochs): # for each epoch,
-            sess.run(tf.assign(model.lr, args.learning_rate * (args.decay_rate ** e))) # decay the learning rate each epoch
-            data_loader.reset_batch_pointer() # start over at start of data.
-            state = sess.run(model.initial_state) # comptue the initial state
-            for b in range(data_loader.num_batches):
-                start = time.time()
-                x, y = data_loader.next_batch() # load input and output
-                feed = {model.input_data: x, model.targets: y} # input is x, actual is y
-                for i, (c, h) in enumerate(model.initial_state): # for each tuple in initial_state, feed
-                    feed[c] = state[i].c
-                    feed[h] = state[i].h
 
-                # instrument for tensorboard
-                # now finaly train. We pull on summaries (for tb), cost, final_state, train_op, and pass it the feed we constructed.
-                summ, train_loss, state, _ = sess.run([summaries, model.cost, model.final_state, model.train_op], feed)
-                writer.add_summary(summ, e * data_loader.num_batches + b) # for TB
+    # Specifying location to store model, best model and tensorboard log.
+    args.save_model = os.path.join(args.output_dir, 'save_model/model')
+    args.save_best_model = os.path.join(args.output_dir, 'best_model/model')
+    args.tb_log_dir = os.path.join(args.output_dir, 'tensorboard_log/')
+    args.vocab_file = ''
 
-                end = time.time()
-                print("{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
-                      .format(e * data_loader.num_batches + b,
-                              args.num_epochs * data_loader.num_batches,
-                              e, train_loss, end - start))
-                if (e * data_loader.num_batches + b) % args.save_every == 0\
-                        or (e == args.num_epochs-1 and
-                            b == data_loader.num_batches-1):
-                    # save for the last result
-                    checkpoint_path = os.path.join(args.save_dir, 'model.ckpt')
-                    saver.save(sess, checkpoint_path,
-                               global_step=e * data_loader.num_batches + b)
-                    print("model saved to {}".format(checkpoint_path))
+    # Create necessary directories.
+    if os.path.exists(args.output_dir):
+        shutil.rmtree(args.output_dir)
+    for paths in [args.save_model, args.save_best_model,
+                  args.tb_log_dir]:
+        os.makedirs(os.path.dirname(paths))
+
+    # Specify logging config.
+    if args.log_to_file:
+        args.log_file = os.path.join(args.output_dir, 'experiment_log.txt')
+    else:
+        args.log_file = 'stdout'
+
+    # Set logging file.
+    if args.log_file == 'stdout':
+        logging.basicConfig(stream=sys.stdout,
+                            format='%(asctime)s %(levelname)s:%(message)s',
+                            level=logging.INFO,
+                            datefmt='%I:%M:%S')
+    else:
+        logging.basicConfig(filename=args.log_file,
+                            format='%(asctime)s %(levelname)s:%(message)s',
+                            level=logging.INFO,
+                            datefmt='%I:%M:%S')
+
+
+    params = json.loads('''
+            {
+            "batch_size": 6,
+            "dropout": 0.0,
+            "embedding_size": 0,
+            "hidden_size": 128,
+            "input_dropout": 0.0,
+            "input_size": 13,
+            "learning_rate": 0.002,
+            "max_grad_norm": 5.0,
+            "model": "lstm",
+            "num_layers": 2,
+            "num_unrollings": 156,
+            "output_size": 40
+            }
+            ''')
+    #logging.info('Parameters are:\n%s\n', json.dumps(params, sort_keys=True, indent=4))
+
+    print("creating graphs at", time.time() - start_time)
+
+    # Create graphs
+    logging.info('Creating graph')
+    graph = tf.Graph()
+    with graph.as_default():
+        with tf.name_scope('training'):
+            train_model = CharRNN(is_training=True, use_batch=True, **params)
+        tf.get_variable_scope().reuse_variables()
+        with tf.name_scope('validation'):
+            valid_model = CharRNN(is_training=False, use_batch=True, **params)
+        with tf.name_scope('evaluation'):
+            test_model = CharRNN(is_training=False, use_batch=False, **params)
+            saver = tf.train.Saver(name='checkpoint_saver', max_to_keep=args.max_to_keep)
+            best_model_saver = tf.train.Saver(name='best_model_saver')
+
+    print("input name", test_model.input_data.name)
+    logging.info('Model size (number of parameters): %s\n', train_model.model_size)
+    logging.info('Start training\n')
+
+    print("creating main sess at", time.time() - start_time)
+
+    with tf.Session(graph=graph) as session:
+        graph_info = session.graph
+        print("got graph_info")
+
+        train_writer = tf.summary.FileWriter(args.tb_log_dir + 'train/', graph_info)
+        valid_writer = tf.summary.FileWriter(args.tb_log_dir + 'valid/', graph_info)
+
+        logging.info("initing")
+        tf.global_variables_initializer().run()
+        for i in range(args.num_epochs):
+            for j in range(args.n_save):
+                    logging.info(
+                        '=' * 19 + ' Epoch %d: %d/%d' + '=' * 19 + '\n', i+1, j+1, args.n_save)
+                    logging.info('Training on training set')
+                    # training step
+                    ppl, train_summary_str, global_step = train_model.run_epoch(
+                        session,
+                        6,
+                        inputs,
+                        outputs,
+                        is_training=True,
+                        verbose=args.verbose,
+                        freq=args.progress_freq,
+                        divide_by_n=args.n_save)
+                    # record the summary
+                    train_writer.add_summary(train_summary_str, global_step)
+                    train_writer.flush()
+                    # save model
+                    saved_path = saver.save(session, args.save_model,
+                                            global_step=train_model.global_step)
+                    logging.info('Latest model saved in %s\n', saved_path)
+                    logging.info('Evaluate on validation set')
+
+                    # valid_ppl, valid_summary_str, _ = valid_model.run_epoch(
+                    valid_ppl, valid_summary_str, _ = valid_model.run_epoch(
+                        session,
+                        6,
+                        inputs,
+                        outputs,
+                        is_training=False,
+                        verbose=args.verbose,
+                        freq=args.progress_freq)
+
+                    # save and update best model
+                    best_model = best_model_saver.save(
+                        session,
+                        args.save_best_model,
+                        global_step=train_model.global_step)
+                    best_valid_ppl = valid_ppl
+                    valid_writer.add_summary(valid_summary_str, global_step)
+                    valid_writer.flush()
+                    logging.info('Best model is saved in %s', best_model)
+        saver.restore(session, best_model)
+        initialStateNames = []
+        finalStateNames = []
+        for i in test_model.initial_state:
+            initialStateNames.append(i.c.name)
+            initialStateNames.append(i.h.name)
+        for i in test_model.final_state:
+            finalStateNames.append(i.c.name)
+            finalStateNames.append(i.h.name)
+
+        initialStateConst = tf.constant(initialStateNames, name="initial_state_names")
+        finalStateNamesConst = tf.constant(finalStateNames, name="final_state_names")
+        zeros = tf.zeros([1, params['hidden_size']], dtype=tf.float32, name="zeros")
+        print(test_model.probs.name)
+        frozenGraph = graph_util.convert_variables_to_constants( # freeze the graph
+            session,
+            tf.get_default_graph().as_graph_def(), # use the default graph
+            ["evaluation/input", "evaluation/softmax/output", "initial_state_names", "final_state_names", "zeros"], # preserve all these OPs
+        )
+        tf.train.write_graph(frozenGraph, 'models', 'cmd_rnn.pb', as_text=False)
+
+        #test_ppl, _, _ = test_model.run_epoch(session, test_size, test_batches, is_training=False, verbose=args.verbose, freq=args.progress_freq)
+
 
 
 if __name__ == '__main__':
