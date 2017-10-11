@@ -7,7 +7,7 @@ import (
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 )
 
-func initDB() (put func(libaural2.LabelSet) error, get func(libaural2.ClipID) (libaural2.LabelSet, error), close func(), err error) {
+func initDB() (put func(libaural2.LabelSet) error, get func(libaural2.ClipID) (libaural2.LabelSet, error), getAll func() (map[libaural2.ClipID]libaural2.LabelSet, error), close func(), err error) {
 	db, err := bolt.Open("label_serve.db", 0600, nil)
 	if err != nil {
 		return
@@ -50,6 +50,25 @@ func initDB() (put func(libaural2.LabelSet) error, get func(libaural2.ClipID) (l
 			return
 		}
 		labelSet, err = libaural2.DeserializeLabelSet(serialized)
+		return
+	}
+	getAll = func() (labelSets map[libaural2.ClipID]libaural2.LabelSet, err error) {
+		labelSets = map[libaural2.ClipID]libaural2.LabelSet{}
+		db.View(func(tx *bolt.Tx) error {
+			// Assume bucket exists and has keys
+			b := tx.Bucket([]byte("labelsets"))
+			c := b.Cursor()
+			for k, v := c.First(); k != nil; k, v = c.Next() {
+				labelSet, err := libaural2.DeserializeLabelSet(v)
+				if err != nil {
+					return err
+				}
+				var clipID libaural2.ClipID
+				copy(clipID[:], k)
+				labelSets[clipID] = labelSet
+			}
+			return nil
+		})
 		return
 	}
 	return

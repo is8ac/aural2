@@ -100,11 +100,9 @@ func start() {
 	serialisedData := dom.GetWindow().Document().GetElementByID("data").(*dom.HTMLDivElement).Dataset()
 	clipIDbytes, err := base32.StdEncoding.DecodeString(serialisedData["b32sampleid"])
 	if err != nil {
-		fmt.Println(err)
 		panic(err)
 	}
 	if len(clipIDbytes) != 32 {
-		fmt.Println("clip id is bad")
 		panic("clip id is wrong len")
 	}
 

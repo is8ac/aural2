@@ -13,6 +13,9 @@ import (
 
 func getAudioClipFromFS(id libaural2.ClipID) (audioClip *libaural2.AudioClip, err error) {
 	rawBytes, err := ioutil.ReadFile("audio/" + id.FSsafeString() + ".raw")
+	if err != nil {
+		return
+	}
 	if len(rawBytes) != len(audioClip) {
 		err = errors.New("Got " + strconv.Itoa(len(rawBytes)) + " bytes, expected" + strconv.Itoa(len(audioClip)))
 		return

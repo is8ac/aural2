@@ -3,6 +3,8 @@ package libaural2
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
+	"io/ioutil"
 	"testing"
 )
 
@@ -72,4 +74,41 @@ func TestToOutputSet(t *testing.T) {
 	}
 	outputSet := labelSet.ToOutputSet()
 	_ = outputSet
+}
+
+func TestSerializeOutputSet(t *testing.T) {
+	hash := sha256.Sum256([]byte("some fake raw data"))
+	labelSet := LabelSet{
+		ID: hash,
+		Labels: []Label{
+			Label{
+				Cmd:  Yes,
+				Time: 1.23,
+			},
+			Label{
+				Cmd:  One,
+				Time: 8.23,
+			},
+			Label{
+				Cmd:  No,
+				Time: 2.00,
+			},
+			Label{
+				Cmd:  Yes,
+				Time: 1.653,
+			},
+			Label{
+				Cmd:  When,
+				Time: 9.4,
+			},
+			Label{
+				Cmd:  Who,
+				Time: 5.2,
+			},
+		},
+	}
+	serialized := labelSet.ToOutputSet().Serialize()
+	if err := ioutil.WriteFile("output.bin", serialized, 0644); err != nil {
+		fmt.Println(err)
+	}
 }

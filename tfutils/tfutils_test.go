@@ -42,6 +42,10 @@ func TestReadWaveToPCM(t *testing.T) {
 	if len(value) < 1000 {
 		t.Fail()
 	}
+	err = sess.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestComputeMFCC(t *testing.T) {
@@ -85,6 +89,59 @@ func TestComputeMFCC(t *testing.T) {
 		logger.Println("wrong len")
 		t.Fail()
 	}
+	err = sess.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestComputeMFCCinputSet(t *testing.T) {
+	rawBytes, err := ioutil.ReadFile("10s.raw")
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	if len(rawBytes) != libaural2.AudioClipLen {
+		logger.Println(err)
+		t.Fail()
+	}
+
+	bytesTensor, err := tf.NewTensor(string(rawBytes))
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	sampleRateTensor, err := tf.NewTensor(int32(16000))
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	s := op.NewScope()
+	bytesPH, pcmOutput := ParseRawBytesToPCM(s.SubScope("parse_raw"))
+	mfccOP, sampleRatePH := ComputeMFCC(s.SubScope("mfcc"), pcmOutput)
+
+	graph, err := s.Finalize()
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	sess, err := tf.NewSession(graph, nil)
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+
+	result, err := sess.Run(map[tf.Output]*tf.Tensor{bytesPH: bytesTensor, sampleRatePH: sampleRateTensor}, []tf.Output{mfccOP}, nil)
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	_ = result[0].Value().([][]float32)
+	logger.Println(result[0].Shape())
+	err = sess.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestComputeSpectrogram(t *testing.T) {
@@ -123,6 +180,55 @@ func TestComputeSpectrogram(t *testing.T) {
 	if len(values) < 100 {
 		logger.Println("len:", len(values))
 		t.Fail()
+	}
+	err = sess.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestComputeSpectrogram2(t *testing.T) {
+	rawBytes, err := ioutil.ReadFile("10s.raw")
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	if len(rawBytes) != libaural2.AudioClipLen {
+		logger.Println(err)
+		t.Fail()
+	}
+
+	bytesTensor, err := tf.NewTensor(string(rawBytes))
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	s := op.NewScope()
+	bytesPH, pcmOutput := ParseRawBytesToPCM(s.SubScope("parse_raw"))
+	spectrogramOP := ComputeSpectrogram(s.SubScope("spectrogram"), pcmOutput, 0, 20)
+
+	graph, err := s.Finalize()
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	sess, err := tf.NewSession(graph, nil)
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+
+	result, err := sess.Run(map[tf.Output]*tf.Tensor{bytesPH: bytesTensor}, []tf.Output{spectrogramOP}, nil)
+	if err != nil {
+		logger.Println(err)
+		t.Fail()
+	}
+	_ = result[0].Value().([][]float32)
+	logger.Println(result[0].Shape())
+
+	err = sess.Close()
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -171,6 +277,10 @@ func TestRenderImage(t *testing.T) {
 	if err = ioutil.WriteFile("spectrogram.jpeg", []byte(specgramJpegBytes), 0644); err != nil {
 		logger.Println(err)
 	}
+	err = sess.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestRenderWav(t *testing.T) {
@@ -217,6 +327,10 @@ func TestRenderWav(t *testing.T) {
 	if err = ioutil.WriteFile("encoded.wav", []byte(wavBytes), 0644); err != nil {
 		logger.Println(err)
 	}
+	err = sess.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestParseRawToPCM(t *testing.T) {
@@ -252,6 +366,10 @@ func TestParseRawToPCM(t *testing.T) {
 	floats := result[0].Value().([]float32)
 	if len(floats) != 160000 {
 		t.Fail()
+	}
+	err = sess.Close()
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -414,5 +532,139 @@ func TestMakeCleanWav(t *testing.T) {
 	if err == nil {
 		logger.Println("did not fail")
 		t.Fail()
+	}
+}
+
+
+func TestEmbedTrainingData(t *testing.T) {
+	hash := libaural2.ClipID{}
+	labelSets := []libaural2.LabelSet{
+		libaural2.LabelSet{
+			ID: hash,
+			Labels: []libaural2.Label{
+				libaural2.Label{
+					Cmd:  libaural2.Who,
+					Time: 1.23,
+				},
+				libaural2.Label{
+					Cmd:  libaural2.What,
+					Time: 4.03,
+				},
+				libaural2.Label{
+					Cmd:  libaural2.When,
+					Time: 9.20,
+				},
+			},
+		},
+		libaural2.LabelSet{
+			ID: hash,
+			Labels: []libaural2.Label{
+				libaural2.Label{
+					Cmd:  libaural2.Yes,
+					Time: 0.93,
+				},
+				libaural2.Label{
+					Cmd:  libaural2.No,
+					Time: 9.02,
+				},
+			},
+		},
+		libaural2.LabelSet{
+			ID: hash,
+			Labels: []libaural2.Label{
+				libaural2.Label{
+					Cmd:  libaural2.OKgoogle,
+					Time: 5.723,
+				},
+			},
+		},
+		libaural2.LabelSet{
+			ID: hash,
+			Labels: []libaural2.Label{
+				libaural2.Label{
+					Cmd:  libaural2.Alexa,
+					Time: 9.53,
+				},
+				libaural2.Label{
+					Cmd:  libaural2.CtrlC,
+					Time: 2.7,
+				},
+			},
+		},
+	}
+	var inputs [][][]float32
+	var outputs [][libaural2.StridesPerClip]int32
+	var ids []libaural2.ClipID
+	// iterate over the labelSets
+	for _, labelSet := range labelSets {
+		mfcc := make([]float32, libaural2.InputSize)
+		input := make([][]float32, libaural2.StridesPerClip)
+		for i := range input {
+			input[i] = mfcc
+		}
+		inputs = append(inputs, input)
+		outputs = append(outputs, labelSet.ToCmdArray())
+		ids = append(ids, labelSet.ID)
+	}
+	graph, err := EmbedTrainingData(inputs, outputs, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// now check that the graph is good.
+	inputOP := graph.Operation("inputs/Identity")
+	if inputOP == nil {
+		t.Fatal("input OP nil")
+	}
+	outputOP := graph.Operation("outputs/Identity")
+	if inputOP == nil {
+		t.Fatal("output OP nil")
+	}
+	clipHashesOP := graph.Operation("clip_hashes/Const")
+	if inputOP == nil {
+		t.Fatal("clip_hashes OP nil")
+	}
+	session, err := tf.NewSession(graph, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := session.Run(
+		map[tf.Output]*tf.Tensor{},
+		[]tf.Output{
+			inputOP.Output(0),
+			outputOP.Output(0),
+			clipHashesOP.Output(0),
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fail()
+	}
+	inputShape := result[0].Shape()
+	outputShape := result[1].Shape()
+	clipHashesShape := result[2].Shape()
+	logger.Println(clipHashesShape)
+	if len(inputShape) != 3 {
+		t.Fatal("input wrong dims")
+	}
+	if len(outputShape) != 2 {
+		t.Fatal("output wrong dims")
+	}
+	if len(clipHashesShape) != 2 {
+		t.Fatal("clip shapes wrong dims")
+	}
+	outerDimLen := int64(len(labelSets))
+	if inputShape[0] != outerDimLen || outputShape[0] != outerDimLen || clipHashesShape[0] != outerDimLen {
+		t.Fatal("outerDim is wrong")
+	}
+	secondDimLen := int64(libaural2.StridesPerClip)
+	if inputShape[1] != secondDimLen || outputShape[1] != secondDimLen {
+		t.Fatal("second dim is wrong")
+	}
+	if inputShape[2] != int64(libaural2.InputSize) {
+		t.Fatal("inputSize is wrong")
+	}
+	err = session.Close()
+	if err != nil {
+		t.Fatal(err)
 	}
 }

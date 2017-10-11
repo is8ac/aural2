@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base32"
+	"encoding/binary"
 	"encoding/gob"
+	"fmt"
 
 	"github.com/lucasb-eyer/go-colorful"
 	"github.ibm.com/ifleonar/mu/urbitname"
@@ -18,7 +20,7 @@ const Duration int = 10
 const SampleRate int = 16000
 
 // StrideWidth is the number of samples in one stride
-const StrideWidth int = 500
+const StrideWidth int = 1024
 
 // SamplePerClip is the number of samples in each clip
 const SamplePerClip int = SampleRate * Duration
@@ -33,7 +35,13 @@ const AudioClipLen int = SamplePerClip * 2
 const InputSize int = 13
 
 // OutputSize is the number of commands. Increase when adding new Cmds!
-const OutputSize int = 31
+const OutputSize int = 40
+
+// BatchSize is the size of the one batch
+const BatchSize int = 2
+
+// CmdList is a list of Cmds
+type CmdList [StridesPerClip]Cmd
 
 // Input is the one input to the LSTM
 type Input [InputSize]float32
@@ -42,10 +50,24 @@ type Input [InputSize]float32
 type InputSet [StridesPerClip]Input
 
 // Output is one output, the onehot array of Cmds.
-type Output [StridesPerClip]float32
+type Output [OutputSize]float32
 
 // OutputSet is the set of outputs for one clip.
 type OutputSet [StridesPerClip]Output
+
+// Serialize converts an outputSet to a []bytes
+func (outputSet *OutputSet) Serialize() (serialized []byte) {
+	buf := new(bytes.Buffer)
+	var count int
+	for _, output := range outputSet {
+		for _, cmdVal := range output {
+			binary.Write(buf, &binary.LittleEndian, cmdVal)
+		}
+	}
+	fmt.Println("count", count*4)
+	serialized = buf.Bytes()
+	return
+}
 
 // AudioClip stores a `Duration` second clip of int16 raw audio
 type AudioClip [AudioClipLen]byte
@@ -98,6 +120,14 @@ type Label struct {
 type LabelSet struct {
 	ID     ClipID
 	Labels []Label
+}
+
+// ToCmdArray converts the labelSet to a slice of Cmds IDs
+func (labels *LabelSet) ToCmdArray() (cmdArray [StridesPerClip]int32) {
+	for _, label := range labels.Labels {
+		cmdArray[int(label.Time*float64(SampleRate/StrideWidth))] = int32(label.Cmd)
+	}
+	return
 }
 
 // ToOutputSet converts the labelSet to an OutputSet
@@ -163,6 +193,8 @@ const (
 	Different
 	When
 	Who
+	OKgoogle
+	Alexa
 )
 
 // CmdToString converts a cmd to the cmds name.
@@ -199,6 +231,8 @@ var CmdToString = map[Cmd]string{
 	Different: "Different",
 	When:      "When",
 	Who:       "Who",
+	OKgoogle:  "OKgoogle",
+	Alexa:     "Alexa",
 }
 
 // IsNumeric is a map of Cmds that are numeric.
