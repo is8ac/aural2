@@ -3,8 +3,6 @@ package libaural2
 import (
 	"bytes"
 	"crypto/sha256"
-	"fmt"
-	"io/ioutil"
 	"testing"
 )
 
@@ -23,8 +21,9 @@ func TestSerialize(t *testing.T) {
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:  Yes,
-				Time: 1.23,
+				Cmd:   Yes,
+				Start: 1.23,
+				End:   2.23,
 			},
 		},
 	}
@@ -45,70 +44,113 @@ func TestSerialize(t *testing.T) {
 	}
 }
 
-func TestToOutputSet(t *testing.T) {
+func TestToCmdArray(t *testing.T) {
 	hash := sha256.Sum256([]byte("some fake raw data"))
 	labelSet := LabelSet{
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:  Yes,
-				Time: 1.23,
+				Cmd:   Who,
+				Start: 0.23,
+				End:   1.23,
 			},
 			Label{
-				Cmd:  Yes,
-				Time: 8.23,
+				Cmd:   Yes,
+				Start: 2.23,
+				End:   3.23,
 			},
 			Label{
-				Cmd:  Yes,
-				Time: 2.00,
+				Cmd:   Seven,
+				Start: 4.23,
+				End:   5.23,
 			},
 			Label{
-				Cmd:  Yes,
-				Time: 1,
+				Cmd:   Alexa,
+				Start: 6.23,
+				End:   7.23,
 			},
 			Label{
-				Cmd:  Yes,
-				Time: 9.4,
+				Cmd:   What,
+				Start: 8.23,
+				End:   9.23,
 			},
 		},
 	}
-	outputSet := labelSet.ToOutputSet()
-	_ = outputSet
+	cmdArray := labelSet.ToCmdArray()
+	if cmdArray[0] != Silence {
+		t.Fatal("!silence")
+	}
 }
 
-func TestSerializeOutputSet(t *testing.T) {
+func TestIsGood(t *testing.T) {
 	hash := sha256.Sum256([]byte("some fake raw data"))
-	labelSet := LabelSet{
+	goodLabelSet := LabelSet{
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:  Yes,
-				Time: 1.23,
+				Cmd:   Who,
+				Start: 0.23,
+				End:   1.23,
 			},
 			Label{
-				Cmd:  One,
-				Time: 8.23,
+				Cmd:   Yes,
+				Start: 2.23,
+				End:   3.23,
 			},
 			Label{
-				Cmd:  No,
-				Time: 2.00,
+				Cmd:   Seven,
+				Start: 4.23,
+				End:   5.23,
 			},
 			Label{
-				Cmd:  Yes,
-				Time: 1.653,
+				Cmd:   Alexa,
+				Start: 6.23,
+				End:   7.23,
 			},
 			Label{
-				Cmd:  When,
-				Time: 9.4,
-			},
-			Label{
-				Cmd:  Who,
-				Time: 5.2,
+				Cmd:   What,
+				Start: 8.23,
+				End:   9.23,
 			},
 		},
 	}
-	serialized := labelSet.ToOutputSet().Serialize()
-	if err := ioutil.WriteFile("output.bin", serialized, 0644); err != nil {
-		fmt.Println(err)
+	if !goodLabelSet.IsGood() {
+		t.Fatal("is not good")
+	}
+	overlappingLabelSet := LabelSet{
+		ID: hash,
+		Labels: []Label{
+			Label{
+				Cmd:   Who,
+				Start: 0.23,
+				End:   3.4,
+			},
+			Label{
+				Cmd:   Yes,
+				Start: 3.21,
+				End:   5.0,
+			},
+		},
+	}
+	if overlappingLabelSet.IsGood() {
+		t.Fatal("overlapping is good")
+	}
+	outOfBoundLabelSet := LabelSet{
+		ID: hash,
+		Labels: []Label{
+			Label{
+				Cmd:   Who,
+				Start: -2.0,
+				End:   3.4,
+			},
+			Label{
+				Cmd:   Yes,
+				Start: 9.21,
+				End:   10.3,
+			},
+		},
+	}
+	if outOfBoundLabelSet.IsGood() {
+		t.Fatal("out of bound is good")
 	}
 }

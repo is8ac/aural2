@@ -20,7 +20,7 @@ const Duration int = 10
 const SampleRate int = 16000
 
 // StrideWidth is the number of samples in one stride
-const StrideWidth int = 1024
+const StrideWidth int = 512
 
 // SamplePerClip is the number of samples in each clip
 const SamplePerClip int = SampleRate * Duration
@@ -110,10 +110,11 @@ func (cmd Cmd) RGBA() (r, g, b, a uint32) {
 	return classColor.RGBA()
 }
 
-// Label is one label in time
+// Label is one period of time.
 type Label struct {
-	Cmd  Cmd
-	Time float64 // the duration since the start of the clip.
+	Cmd   Cmd
+	Start float64 // the duration since the start of the clip.
+	End   float64
 }
 
 // LabelSet is the set of labels for one Clip
@@ -122,21 +123,53 @@ type LabelSet struct {
 	Labels []Label
 }
 
-// ToCmdArray converts the labelSet to a slice of Cmds IDs
-func (labels *LabelSet) ToCmdArray() (cmdArray [StridesPerClip]int32) {
-	for _, label := range labels.Labels {
-		cmdArray[int(label.Time*float64(SampleRate/StrideWidth))] = int32(label.Cmd)
+// ToCmdIDArray converts the labelSet to a slice of Cmds IDs
+func (labels *LabelSet) ToCmdIDArray() (cmdArray [StridesPerClip]int32) {
+	for i := range cmdArray {
+		loc := float64(i) / float64(StridesPerClip) * float64(Duration)
+		for _, label := range labels.Labels {
+			if loc > label.Start && loc < label.End {
+				cmdArray[i] = int32(label.Cmd)
+				continue
+			}
+		}
 	}
 	return
 }
 
-// ToOutputSet converts the labelSet to an OutputSet
-func (labels *LabelSet) ToOutputSet() (output *OutputSet) {
-	output = &OutputSet{}
-	for _, label := range labels.Labels {
-		output[int(label.Time*float64(SampleRate/StrideWidth))] = label.Cmd.ToOutput()
+// ToCmdArray converts the labelSet to a slice of Cmds
+func (labels *LabelSet) ToCmdArray() (cmdArray [StridesPerClip]Cmd) {
+	for i := range cmdArray {
+		loc := float64(i) / float64(StridesPerClip) * float64(Duration)
+		for _, label := range labels.Labels {
+			if loc > label.Start && loc < label.End {
+				cmdArray[i] = label.Cmd
+				continue
+			}
+		}
 	}
 	return
+}
+
+// IsGood returns true iff the labelsSet contains no overlaps or other bad things. Executes in O(n2) time.
+func (labels *LabelSet) IsGood() bool {
+	for _, label := range labels.Labels {
+		if label.Start < 0 {
+			return false
+		}
+		if label.End > float64(Duration) {
+			return false
+		}
+		for _, otherLabel := range labels.Labels {
+			if label.Start > otherLabel.Start && label.Start < otherLabel.End {
+				return false
+			}
+			if label.End > otherLabel.Start && label.End < otherLabel.End {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Serialize converts a LabelSet to []byte

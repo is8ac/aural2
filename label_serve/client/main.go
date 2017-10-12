@@ -22,24 +22,32 @@ func colorToCSSstring(colorObj color.Color) (colorString string) {
 // setCurser takes the fraction of the audio file duration as a float betwene 0 and 1.
 func setCurser(position float64) {
 	if position > 1 {
-		fmt.Println("position:", position)
+		print("position:", position)
 		return
 	}
 	curser := dom.GetWindow().Document().GetElementByID("curser").(*dom.HTMLDivElement)
 	curser.Style().Set("left", strconv.FormatFloat(position*100, 'f', 8, 64)+"%")
 }
 
-func addLabel(label la.Label) {
+func createLabelMarker(label la.Label) (setEnd func(float64)) {
 	d := dom.GetWindow().Document()
 	labelsContainer := d.GetElementByID("labels").(*dom.HTMLDivElement)
 	labelDiv := d.CreateElement("div").(*dom.HTMLDivElement)
-	position := label.Time / 10
-	fmt.Println(position)
-	labelDiv.Style().Set("left", strconv.FormatFloat(position*100, 'f', 8, 64)+"%")
+	left := label.Start / float64(la.Duration)
+	labelDiv.Style().Set("left", strconv.FormatFloat(left*100, 'f', 8, 64)+"%")
 	labelDiv.SetClass("label")
 	labelDiv.SetInnerHTML("<p class='cmd_label'>" + label.Cmd.String() + "</p>")
 	labelDiv.Style().SetProperty("background-color", colorToCSSstring(label.Cmd), "")
 	labelsContainer.AppendChild(labelDiv)
+
+	setEnd = func(end float64) {
+		width := (end - label.Start) / float64(la.Duration)
+		labelDiv.Style().Set("width", strconv.FormatFloat(width*100, 'f', 8, 64)+"%")
+	}
+	if label.End != 0 {
+		setEnd(label.End)
+	}
+	return
 }
 
 func postLabelsSet(labels la.LabelSet) (err error) {
@@ -49,7 +57,7 @@ func postLabelsSet(labels la.LabelSet) (err error) {
 	}
 	_, err = xhr.Send("POST", "../labelsset/"+clipID.FSsafeString(), serialised)
 	if err != nil {
-		fmt.Println(err)
+		print(err)
 		return
 	}
 	return
@@ -58,17 +66,16 @@ func postLabelsSet(labels la.LabelSet) (err error) {
 func getLabelsSet() {
 	resp, err := xhr.Send("GET", "../labelsset/"+clipID.FSsafeString(), nil)
 	if err != nil {
-		fmt.Println(err)
+		print(err)
 		return
 	}
 	labelsSet, err = la.DeserializeLabelSet(resp)
 	if err != nil {
-		fmt.Println(err)
+		print(err)
 		return
 	}
 	for _, label := range labelsSet.Labels {
-		fmt.Println(label.Cmd)
-		addLabel(label)
+		createLabelMarker(label)
 	}
 	return
 }
@@ -107,10 +114,13 @@ func start() {
 	}
 
 	copy(clipID[:], clipIDbytes)
-	fmt.Println(clipID)
+	print(clipID.String())
 	go getLabelsSet()
 	w := dom.GetWindow()
 	d := w.Document()
+	var currentlyDepressedKey string
+	var curLabel la.Label
+	var setEnd func(float64)
 	audio := d.GetElementByID("audio").(*dom.HTMLAudioElement)
 	//audio.Play()
 	go func() {
@@ -120,6 +130,9 @@ func start() {
 				currentTime := audio.Get("currentTime").Float()
 				frac := currentTime / float64(la.Duration)
 				setCurser(frac)
+				if setEnd != nil {
+					setEnd(currentTime)
+				}
 			}
 		}
 	}()
@@ -127,30 +140,50 @@ func start() {
 		currentTime := audio.Get("currentTime").Float()
 		frac := currentTime / float64(la.Duration)
 		setCurser(frac)
+		if setEnd != nil {
+			setEnd(currentTime)
+		}
 		//timelinePos += -0.1
 		//setTimelinePos(timelinePos)
+	})
+	w.AddEventListener("keyup", false, func(event dom.Event) {
+		key := event.(*dom.KeyboardEvent).Key
+		if key == currentlyDepressedKey {
+			curLabel.End = audio.Get("currentTime").Float()
+			setEnd = nil
+			labelsSet.Labels = append(labelsSet.Labels, curLabel)
+			currentlyDepressedKey = ""
+		}
 	})
 	w.AddEventListener("keydown", false, func(event dom.Event) {
 		ke := event.(*dom.KeyboardEvent)
 		for key, cmd := range keyToCmd {
-			if key == ke.Key {
+			// if it is a cmd,
+			if key == ke.Key && key != currentlyDepressedKey {
+				currentlyDepressedKey = key
 				label := la.Label{
-					Cmd:  cmd,
-					Time: audio.Get("currentTime").Float(),
+					Cmd:   cmd,
+					Start: audio.Get("currentTime").Float(),
 				}
-				addLabel(label)
-				labelsSet.Labels = append(labelsSet.Labels, label)
-				fmt.Println(label)
+				curLabel = label
+				setEnd = createLabelMarker(curLabel)
+				continue
 			}
 		}
 		if ke.Key == "s" {
 			go postLabelsSet(labelsSet)
 		}
+		if ke.Key == "Delete" {
+			labelsSet.Labels = []la.Label{}
+			labelsElm := d.GetElementByID("labels").(*dom.HTMLDivElement)
+			for labelsElm.Call("hasChildNodes").Bool() {
+				labelsElm.Call("removeChild", labelsElm.Get("lastChild"))
+			}
+		}
 		if ke.Key == "ArrowRight" {
 			currentTime := audio.Get("currentTime").Float()
 			newTime := currentTime + 0.04
 			audio.Set("currentTime", strconv.FormatFloat(newTime, 'f', 8, 64))
-			fmt.Println("newTime:", newTime)
 		}
 		if ke.Key == "ArrowLeft" {
 			currentTime := audio.Get("currentTime").Float()

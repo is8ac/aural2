@@ -535,7 +535,6 @@ func TestMakeCleanWav(t *testing.T) {
 	}
 }
 
-
 func TestEmbedTrainingData(t *testing.T) {
 	hash := libaural2.ClipID{}
 	labelSets := []libaural2.LabelSet{
@@ -543,16 +542,19 @@ func TestEmbedTrainingData(t *testing.T) {
 			ID: hash,
 			Labels: []libaural2.Label{
 				libaural2.Label{
-					Cmd:  libaural2.Who,
-					Time: 1.23,
+					Cmd:   libaural2.Who,
+					Start: 1.23,
+					End:   2.8,
 				},
 				libaural2.Label{
-					Cmd:  libaural2.What,
-					Time: 4.03,
+					Cmd:   libaural2.What,
+					Start: 3.23,
+					End:   4.8,
 				},
 				libaural2.Label{
-					Cmd:  libaural2.When,
-					Time: 9.20,
+					Cmd:   libaural2.When,
+					Start: 5.23,
+					End:   6.8,
 				},
 			},
 		},
@@ -560,12 +562,14 @@ func TestEmbedTrainingData(t *testing.T) {
 			ID: hash,
 			Labels: []libaural2.Label{
 				libaural2.Label{
-					Cmd:  libaural2.Yes,
-					Time: 0.93,
+					Cmd:   libaural2.Yes,
+					Start: 1.23,
+					End:   2.8,
 				},
 				libaural2.Label{
-					Cmd:  libaural2.No,
-					Time: 9.02,
+					Cmd:   libaural2.No,
+					Start: 3.23,
+					End:   4.8,
 				},
 			},
 		},
@@ -574,7 +578,8 @@ func TestEmbedTrainingData(t *testing.T) {
 			Labels: []libaural2.Label{
 				libaural2.Label{
 					Cmd:  libaural2.OKgoogle,
-					Time: 5.723,
+					Start: 1.23,
+					End: 2.8,
 				},
 			},
 		},
@@ -583,11 +588,13 @@ func TestEmbedTrainingData(t *testing.T) {
 			Labels: []libaural2.Label{
 				libaural2.Label{
 					Cmd:  libaural2.Alexa,
-					Time: 9.53,
+					Start: 1.95,
+					End: 2.8,
 				},
 				libaural2.Label{
 					Cmd:  libaural2.CtrlC,
-					Time: 2.7,
+					Start: 3.23,
+					End: 4.02,
 				},
 			},
 		},
@@ -603,7 +610,7 @@ func TestEmbedTrainingData(t *testing.T) {
 			input[i] = mfcc
 		}
 		inputs = append(inputs, input)
-		outputs = append(outputs, labelSet.ToCmdArray())
+		outputs = append(outputs, labelSet.ToCmdIDArray())
 		ids = append(ids, labelSet.ID)
 	}
 	graph, err := EmbedTrainingData(inputs, outputs, ids)

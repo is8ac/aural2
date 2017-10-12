@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"image"
+	"image/png"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -146,7 +149,7 @@ func makeServeTrainingDataGraphdef(getAllLabelSets func() (map[libaural2.ClipID]
 			}
 			input := result[0].Value().([][]float32)
 			inputs = append(inputs, input)
-			outputs = append(outputs, labelSet.ToCmdArray())
+			outputs = append(outputs, labelSet.ToCmdIDArray())
 			ids = append(ids, id)
 		}
 		graph, err := tfutils.EmbedTrainingData(inputs, outputs, ids)
@@ -183,6 +186,11 @@ func makeWriteLabelsSet(put func(libaural2.LabelSet) error) func(http.ResponseWr
 		labelsSet, err := libaural2.DeserializeLabelSet(serialized)
 		if err != nil {
 			logger.Println(err)
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+		if !labelsSet.IsGood() {
+			logger.Println(sampleID, "bad labelSet", labelsSet.ID)
 			http.Error(w, "", http.StatusBadRequest)
 			return
 		}
@@ -254,9 +262,23 @@ func makeSampleHandler() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+func renderColorLabelSetImage(labelSet libaural2.LabelSet) (pngBytes []byte, err error) {
+	image := image.NewRGBA(image.Rect(0, 0, libaural2.StridesPerClip, 1))
+	for x, cmd := range labelSet.ToCmdArray() {
+		logger.Println(cmd)
+		image.Set(x, 0, cmd)
+	}
+	buff := bytes.Buffer{}
+	if err = png.Encode(&buff, image); err != nil {
+		return
+	}
+	pngBytes = buff.Bytes()
+	return
+}
+
 var logger = log.New(os.Stdout, "ts_vis: ", log.Lshortfile|log.LUTC|log.Ltime|log.Ldate)
 
-const version = "0.2.2"
+const version = "0.3.1"
 
 func main() {
 	logger.Println("Audio viz server version " + version)
@@ -286,6 +308,7 @@ func main() {
 	// with makeServeAudioDerivedBlob(), we convert the blob conversion func into a request handler.
 	r.HandleFunc("/images/spectrogram/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderSpectrogram))
 	r.HandleFunc("/images/mfcc/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderMFCC))
+	r.HandleFunc("/images/labelset/{sampleID}.png", makeServeLabelsSetDerivedBlob(get, renderColorLabelSetImage))
 	r.HandleFunc("/audio/{sampleID}.wav", makeServeAudioDerivedBlob(computeWav))
 	r.HandleFunc("/tagui/{sampleID}", makeServeTagUI())
 	r.HandleFunc("/trainingdata.pb", makeServeTrainingDataGraphdef(getAll))
