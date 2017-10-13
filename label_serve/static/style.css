@@ -44,6 +44,10 @@ body {
   height: 10%;
 }
 
+#labels-container {
+  height: 10%;
+}
+
 #labelset{
   height: 10%;
 }

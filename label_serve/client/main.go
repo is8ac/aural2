@@ -125,7 +125,7 @@ func start() {
 	//audio.Play()
 	go func() {
 		for {
-			time.Sleep(time.Millisecond * 100)
+			time.Sleep(time.Millisecond * 10)
 			if !audio.Paused {
 				currentTime := audio.Get("currentTime").Float()
 				frac := currentTime / float64(la.Duration)

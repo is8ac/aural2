@@ -26,7 +26,7 @@ const StrideWidth int = 512
 const SamplePerClip int = SampleRate * Duration
 
 // StridesPerClip is the number of strides per clip
-const StridesPerClip int = SamplePerClip / StrideWidth
+const StridesPerClip int = SamplePerClip/StrideWidth - 1
 
 // AudioClipLen is the number of bytes in one audio clip
 const AudioClipLen int = SamplePerClip * 2
