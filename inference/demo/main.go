@@ -11,6 +11,7 @@ import (
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
+	"github.ibm.com/Blue-Horizon/aural2/inference/arecordcapture"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils"
 )
@@ -24,7 +25,7 @@ const inputname = "evaluation/input"
 // loadGraph loads the graphDef file from the fs, and returns a tf.SavedModel
 func loadGraph() (session *tf.Session, input, output tf.Output, statePlaceholders, stateFetches []tf.Output, stateFeeds map[tf.Output]*tf.Tensor, err error) {
 	// read the serialised graphDef file.
-	graphBytes, err := ioutil.ReadFile("models/cmd_rnn.pb")
+	graphBytes, err := ioutil.ReadFile("models/cmd_rnn_1000ep.pb")
 	if err != nil {
 		logger.Println(err)
 		return
@@ -160,6 +161,12 @@ func argmax(probs []float32) (index int32) {
 	return
 }
 
+func computeFakeMFCCs() (mfccs [][]float32, err error) {
+	labelSet := libaural2.GenFakeLabelSet()
+	mfccs = libaural2.GenFakeInput(labelSet.ToCmdIDArray())
+	return
+}
+
 func computeMFCC() (mfcc [][]float32, err error) {
 	s := op.NewScope()
 	bytesPH, pcm := tfutils.ParseRawBytesToPCM(s)
@@ -176,7 +183,8 @@ func computeMFCC() (mfcc [][]float32, err error) {
 	if err != nil {
 		logger.Fatalln(err)
 	}
-	rawBytes, err := ioutil.ReadFile("label_serve/audio/QAKZAMTDHFVNZ6QLPIBFYYSRQN2Y43IHU76ZQN6L6C22OWLR66RQ====.raw")
+	//rawBytes, err := ioutil.ReadFile("label_serve/audio/QAKZAMTDHFVNZ6QLPIBFYYSRQN2Y43IHU76ZQN6L6C22OWLR66RQ====.raw")
+	rawBytes, err := ioutil.ReadFile("/tmp/cmd/cmd-01.raw")
 	if err != nil {
 		return
 	}
@@ -212,12 +220,26 @@ func main() {
 		logger.Fatalln(err)
 	}
 	fetches = append(fetches, output) // also pull on output
+	//mfccs, err := computeFakeMFCCs()
 	mfccs, err := computeMFCC()
 	if err != nil {
 		logger.Fatalln(err)
 	}
 	// Run
+	//oldCmd := libaural2.Nil
+	//count := 0
+	reader, err := arecordcapture.Start()
+	if err != nil {
+		panic(err)
+	}
+	buff := make([]byte, libaural2.StrideWidth*2)
 	for _, mfcc := range mfccs {
+		n, err := reader.Read(buff)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(n)
+		fmt.Println(buff)
 		inputTensor, err := tf.NewTensor([][][]float32{[][]float32{mfcc}})
 		if err != nil {
 			logger.Fatalln(err)
@@ -237,8 +259,14 @@ func main() {
 		for i, ph := range placeholders {
 			feeds[ph] = results[i]
 		}
-		_ = cmd
-		fmt.Println(cmd)
+		fmt.Println(cmd, probs)
+		//if cmd == oldCmd {
+		//	count++
+		//} else {
+		//	logger.Println(cmd, count)
+		//	count = 0
+		//}
+		//oldCmd = cmd
 	}
 	println("")
 }

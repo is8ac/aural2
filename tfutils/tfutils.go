@@ -4,6 +4,7 @@ package tfutils
 import (
 	"errors"
 	"log"
+	"math/rand"
 	"os"
 
 	"sync"
@@ -190,11 +191,25 @@ func BytesToBytes(s *op.Scope, inputPH, outputOP tf.Output, feeds map[tf.Output]
 	return
 }
 
+// SplitInputSeqs splits long seqs into shorter seqs for training.
+func SplitInputSeqs(inputSet [][][]float32) (splitSet [][][]float32) {
+	numSubSeqs := libaural2.StridesPerClip / libaural2.SeqLen
+	logger.Println(numSubSeqs)
+	splitSet = make([][][]float32, len(inputSet)*numSubSeqs)
+	for i, seq := range inputSet {
+		for part := 0; part < numSubSeqs; part++ {
+			logger.Println(i*numSubSeqs+part, part*libaural2.SeqLen, (part+1)*libaural2.SeqLen)
+			splitSet[i*numSubSeqs+part] = seq[part*libaural2.SeqLen : (part+1)*libaural2.SeqLen]
+		}
+	}
+	return
+}
+
 // EmbedTrainingData returns a GrapDef with the inputs and outputs embeded
 // inputs must be of shape [len, libaural2.StridesPerClip, libaural2.InputSize]
 // outputs must be of shape [len, libaural2.StridesPerClip]
 // where len is the same for inputs, outputs, and ids.
-func EmbedTrainingData(inputs [][][]float32, outputs [][libaural2.StridesPerClip]int32, ids []libaural2.ClipID) (graph *tf.Graph, err error) {
+func EmbedTrainingData(inputs [][][]float32, outputs [][libaural2.StridesPerClip]int32, ids []libaural2.ClipID, numSubSeqs int, batchSize int) (graph *tf.Graph, err error) {
 	if len(inputs) != len(outputs) || len(ids) != len(inputs) {
 		err = errors.New("input, output, or ids len do not match")
 		return
@@ -216,11 +231,45 @@ func EmbedTrainingData(inputs [][][]float32, outputs [][libaural2.StridesPerClip
 		return
 	}
 	s := op.NewScope()
-	inputsConst := op.Const(s.SubScope("consts"), inputs)
-	outputsConst := op.Const(s.SubScope("consts"), outputs)
+	is := s.SubScope("inputs")
+	os := s.SubScope("outputs")
+	inputsConst := op.Const(is, inputs)
+	outputsConst := op.Const(os, outputs)
+	inputsSubSeqs := make([]tf.Output, numSubSeqs)
+	outputsSubSeqs := make([]tf.Output, numSubSeqs)
+	for i := 0; i < numSubSeqs; i++ {
+		start := rand.Intn(libaural2.StridesPerClip - libaural2.SeqLen)
+
+		inputsBegin := op.Const(is.SubScope("begin"), []int32{0, int32(start), 0})
+		inputsSize := op.Const(is.SubScope("size"), []int32{int32(len(inputs)), int32(libaural2.SeqLen), int32(libaural2.InputSize)})
+		inputSubSeq := op.Slice(is.SubScope("slice"), inputsConst, inputsBegin, inputsSize)
+		inputsSubSeqs[i] = inputSubSeq
+
+		outputsBegin := op.Const(os.SubScope("begin"), []int32{0, int32(start)})
+		outputsSize := op.Const(os.SubScope("size"), []int32{int32(len(inputs)), int32(libaural2.SeqLen)})
+		outputSubSeq := op.Slice(os.SubScope("slice"), outputsConst, outputsBegin, outputsSize)
+		outputsSubSeqs[i] = outputSubSeq
+	}
+	concatDim := op.Const(s.SubScope("concat_dims"), int32(0))
+	concatInputs := op.Concat(is, concatDim, inputsSubSeqs)
+	concatOutputs := op.Concat(os, concatDim, outputsSubSeqs)
+
+	indicesShape := op.Const(s.SubScope("indices_shape"), []int32{int32(batchSize)})
+	min := op.Const(s.SubScope("min"), int32(0))
+	max := op.Const(s.SubScope("max"), int32(len(inputs)*numSubSeqs))
+	indices := op.RandomUniformInt(s, indicesShape, min, max)
+	inputBatch := op.Gather(is, concatInputs, indices)
+	outputBatch := op.Gather(os, concatOutputs, indices)
+
 	idsConst := op.Const(s.SubScope("clip_hashes"), ids)
-	_ = op.Identity(s.SubScope("inputs"), inputsConst) // we use identity so that output names stay constant when changing the inner workings.
-	_ = op.Identity(s.SubScope("outputs"), outputsConst)
+	inputIdent := op.Identity(is, inputBatch) // we use identity so that output names stay constant when changing the inner workings.
+	outputIdent := op.Identity(os, outputBatch)
+	logger.Println(inputIdent.Shape())
+	logger.Println(inputIdent.Op.Name())
+	_ = inputIdent
+	_ = outputIdent
+	//logger.Println(concatInputs)
+	//logger.Println(outputIdent.Op.Name())
 	_ = idsConst
 	graph, err = s.Finalize()
 	return

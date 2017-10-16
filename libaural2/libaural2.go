@@ -28,6 +28,9 @@ const SamplePerClip int = SampleRate * Duration
 // StridesPerClip is the number of strides per clip
 const StridesPerClip int = SamplePerClip/StrideWidth - 1
 
+// SeqLen is the length of sequences to be feed to the LSTM for training.
+const SeqLen int = 50
+
 // AudioClipLen is the number of bytes in one audio clip
 const AudioClipLen int = SamplePerClip * 2
 
@@ -35,7 +38,7 @@ const AudioClipLen int = SamplePerClip * 2
 const InputSize int = 13
 
 // OutputSize is the number of commands. Increase when adding new Cmds!
-const OutputSize int = 40
+const OutputSize int = 4
 
 // BatchSize is the size of the one batch
 const BatchSize int = 2
@@ -194,106 +197,184 @@ func DeserializeLabelSet(serialized []byte) (labelSet LabelSet, err error) {
 
 // Standard Cmds
 const (
-	Silence Cmd = iota
+	Nil Cmd = iota
 	Unknown
 	Yes
 	No
-	Zero
-	One
-	Two
-	Three
-	Four
-	Five
-	Six
-	Seven
-	Eight
-	Nine
-	Ten
-	CtrlC
-	Sudo
-	Tab
-	Return
-	Train
-	Mpc
-	Play
-	Pause
-	True
-	False
-	Wrong
-	Grep
-	What
-	Same
-	Different
-	When
-	Who
-	OKgoogle
-	Alexa
+	//Zero
+	//One
+	//Two
+	//Three
+	//Four
+	//Five
+	//Six
+	//Seven
+	//Eight
+	//Nine
+	//Ten
+	//CtrlC
+	//Sudo
+	//Tab
+	//Return
+	//Train
+	//Mpc
+	//Play
+	//Pause
+	//True
+	//False
+	//Wrong
+	//Grep
+	//What
+	//Same
+	//Different
+	//When
+	//Who
+	//OKgoogle
+	//Alexa
 )
 
 // CmdToString converts a cmd to the cmds name.
 var CmdToString = map[Cmd]string{
-	Silence:   "Silence",
-	Unknown:   "Unknown",
-	Yes:       "Yes",
-	No:        "No",
-	Zero:      "Zero",
-	One:       "One",
-	Two:       "Two",
-	Three:     "Three",
-	Four:      "Four",
-	Five:      "Five",
-	Six:       "Six",
-	Seven:     "Seven",
-	Eight:     "Eight",
-	Nine:      "Nine",
-	Ten:       "Ten",
-	CtrlC:     "CtrlC",
-	Sudo:      "Sudo",
-	Tab:       "Tab",
-	Return:    "Return",
-	Train:     "Train",
-	Mpc:       "Mpc",
-	Play:      "Play",
-	Pause:     "Pause",
-	True:      "True",
-	False:     "False",
-	Wrong:     "Wrong",
-	Grep:      "Grep",
-	What:      "What",
-	Same:      "Same",
-	Different: "Different",
-	When:      "When",
-	Who:       "Who",
-	OKgoogle:  "OKgoogle",
-	Alexa:     "Alexa",
+	Nil:     "nil",
+	Unknown: "Unknown",
+	Yes:     "Yes",
+	No:      "No",
+	//Zero:    "Zero",
+	//One:       "One",
+	//Two:       "Two",
+	//Three:     "Three",
+	//Four:      "Four",
+	//Five:      "Five",
+	//Six:       "Six",
+	//Seven:     "Seven",
+	//Eight:     "Eight",
+	//Nine:      "Nine",
+	//Ten:       "Ten",
+	//CtrlC:     "CtrlC",
+	//Sudo:      "Sudo",
+	//Tab:       "Tab",
+	//Return:    "Return",
+	//Train:     "Train",
+	//Mpc:       "Mpc",
+	//Play:      "Play",
+	//Pause:     "Pause",
+	//True:      "True",
+	//False:     "False",
+	//Wrong:     "Wrong",
+	//Grep:      "Grep",
+	//What:      "What",
+	//Same:      "Same",
+	//Different: "Different",
+	//When:      "When",
+	//Who:       "Who",
+	//OKgoogle:  "OKgoogle",
+	//Alexa:     "Alexa",
 }
 
 // IsNumeric is a map of Cmds that are numeric.
 var IsNumeric = map[Cmd]bool{
-	Zero:  true,
-	One:   true,
-	Two:   true,
-	Three: true,
-	Four:  true,
-	Five:  true,
-	Six:   true,
-	Seven: true,
-	Eight: true,
-	Nine:  true,
-	Ten:   true,
+//Zero:  true,
+//One:   true,
+//Two:   true,
+//Three: true,
+//Four:  true,
+//Five:  true,
+//Six:   true,
+//Seven: true,
+//Eight: true,
+//Nine:  true,
+//Ten:   true,
 }
 
 // NumericToInt converts a numeric Cmd to an int.
 var NumericToInt = map[Cmd]int{
-	Zero:  0,
-	One:   1,
-	Two:   2,
-	Three: 3,
-	Four:  4,
-	Five:  5,
-	Six:   6,
-	Seven: 7,
-	Eight: 8,
-	Nine:  9,
-	Ten:   10,
+//Zero:  0,
+//One:   1,
+//Two:   2,
+//Three: 3,
+//Four:  4,
+//Five:  5,
+//Six:   6,
+//Seven: 7,
+//Eight: 8,
+//Nine:  9,
+//Ten:   10,
+}
+
+// GenFakeLabelSet creates a fake LabelSet for testing.
+func GenFakeLabelSet() (output LabelSet) {
+	output.Labels = []Label{
+		Label{
+			Cmd:   Nil,
+			Start: 0,
+			End:   1,
+		},
+		Label{
+			Cmd:   Yes,
+			Start: 1,
+			End:   2,
+		},
+		Label{
+			Cmd:   No,
+			Start: 2,
+			End:   3,
+		},
+		Label{
+			Cmd:   Nil,
+			Start: 3,
+			End:   4,
+		},
+		Label{
+			Cmd:   Yes,
+			Start: 4,
+			End:   5,
+		},
+		Label{
+			Cmd:   No,
+			Start: 5,
+			End:   6,
+		},
+		Label{
+			Cmd:   Nil,
+			Start: 6,
+			End:   7,
+		},
+		Label{
+			Cmd:   Yes,
+			Start: 7,
+			End:   8,
+		},
+		Label{
+			Cmd:   No,
+			Start: 8,
+			End:   9,
+		},
+		Label{
+			Cmd:   Nil,
+			Start: 9,
+			End:   10,
+		},
+	}
+	return
+}
+
+//GenFakeInput produces fake a mfcc list exactly matching the given cmdIdArray
+func GenFakeInput(cmds [StridesPerClip]int32) (fakeMFCCs [][]float32) {
+	fakeMFCCs = make([][]float32, StridesPerClip)
+	for i, cmd := range cmds {
+		fakeMFCCs[i] = make([]float32, InputSize)
+		if cmd == 0 {
+			fakeMFCCs[i][0] = 1
+		}
+		if cmd == 1 {
+			fakeMFCCs[i][1] = 1
+		}
+		if cmd == 2 {
+			fakeMFCCs[i][2] = 1
+		}
+		if cmd == 3 {
+			fakeMFCCs[i][3] = 1
+		}
+	}
+	return
 }

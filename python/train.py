@@ -69,18 +69,17 @@ def main():
 
     args = parser.parse_args()
 
-    print("creating data loading sess at", time.time() - start_time)
-    with tf.Session() as sess:
-        graph_def = tf.GraphDef()
-        graph_path = 'trainingdata.pb'
-        with open(graph_path, "rb") as f:
-            proto_b = f.read()
-            graph_def.ParseFromString(proto_b)
-        ops = tf.import_graph_def(graph_def, name="training_data", return_elements=["inputs/Identity:0", "outputs/Identity:0", "clip_hashes/Const:0"])
-        #print(ops)
-        (inputs, outputs, hashes) = sess.run(ops)
-    print(inputs.shape, outputs.shape)
-    print("got data at", time.time() - start_time)
+    #print("creating data loading sess at", time.time() - start_time)
+    #with tf.Session() as sess:
+    #    with tf.name_scope('training_data'):
+    #        graph_def = tf.GraphDef()
+    #        graph_path = 'trainingdata.pb'
+    #        with open(graph_path, "rb") as f:
+    #            proto_b = f.read()
+    #            graph_def.ParseFromString(proto_b)
+    #        (inputsOP, outputsOP, hashesOP, batchPH) = tf.import_graph_def(graph_def, name="training_data", return_elements=["inputs/Identity:0", "outputs/Identity:0", "clip_hashes/Const:0", "batch/Placeholder:0"])
+    #        hashes = sess.run(hashesOP)
+    #print("from", len(hashes), "audio files")
 
 
     # Specifying location to store model, best model and tensorboard log.
@@ -117,18 +116,18 @@ def main():
 
     params = json.loads('''
             {
-            "batch_size": 6,
+            "batch_size": 20,
             "dropout": 0.0,
             "embedding_size": 0,
-            "hidden_size": 128,
+            "hidden_size": 512,
             "input_dropout": 0.0,
             "input_size": 13,
             "learning_rate": 0.002,
             "max_grad_norm": 5.0,
             "model": "lstm",
             "num_layers": 2,
-            "num_unrollings": 156,
-            "output_size": 40
+            "num_unrollings": 50,
+            "output_size": 4
             }
             ''')
     #logging.info('Parameters are:\n%s\n', json.dumps(params, sort_keys=True, indent=4))
@@ -139,75 +138,53 @@ def main():
     logging.info('Creating graph')
     graph = tf.Graph()
     with graph.as_default():
+        # make graphs for training
         with tf.name_scope('training'):
             train_model = CharRNN(is_training=True, use_batch=True, **params)
         tf.get_variable_scope().reuse_variables()
-        with tf.name_scope('validation'):
-            valid_model = CharRNN(is_training=False, use_batch=True, **params)
         with tf.name_scope('evaluation'):
             test_model = CharRNN(is_training=False, use_batch=False, **params)
-            saver = tf.train.Saver(name='checkpoint_saver', max_to_keep=args.max_to_keep)
-            best_model_saver = tf.train.Saver(name='best_model_saver')
 
-    print("input name", test_model.input_data.name)
-    logging.info('Model size (number of parameters): %s\n', train_model.model_size)
     logging.info('Start training\n')
 
     print("creating main sess at", time.time() - start_time)
 
     with tf.Session(graph=graph) as session:
+        with tf.name_scope('training_data'):
+            graph_def = tf.GraphDef()
+            graph_path = 'trainingdata.pb'
+            with open(graph_path, "rb") as f:
+                proto_b = f.read()
+                graph_def.ParseFromString(proto_b)
+            (inputsOP, outputsOP, hashesOP) = tf.import_graph_def(graph_def, name="training_data", return_elements=["inputs/Identity:0", "outputs/Identity:0", "clip_hashes/Const:0"])
+            hashes = session.run(hashesOP)
+            print("from", len(hashes), "audio files")
+
         graph_info = session.graph
         print("got graph_info")
 
         train_writer = tf.summary.FileWriter(args.tb_log_dir + 'train/', graph_info)
-        valid_writer = tf.summary.FileWriter(args.tb_log_dir + 'valid/', graph_info)
 
-        logging.info("initing")
+        print("done creating tf writers")
         tf.global_variables_initializer().run()
-        for i in range(args.num_epochs):
-            for j in range(args.n_save):
-                    logging.info(
-                        '=' * 19 + ' Epoch %d: %d/%d' + '=' * 19 + '\n', i+1, j+1, args.n_save)
-                    logging.info('Training on training set')
-                    # training step
-                    ppl, train_summary_str, global_step = train_model.run_epoch(
-                        session,
-                        6,
-                        inputs,
-                        outputs,
-                        is_training=True,
-                        verbose=args.verbose,
-                        freq=args.progress_freq,
-                        divide_by_n=args.n_save)
-                    # record the summary
-                    train_writer.add_summary(train_summary_str, global_step)
-                    train_writer.flush()
-                    # save model
-                    saved_path = saver.save(session, args.save_model,
-                                            global_step=train_model.global_step)
-                    logging.info('Latest model saved in %s\n', saved_path)
-                    logging.info('Evaluate on validation set')
-
-                    # valid_ppl, valid_summary_str, _ = valid_model.run_epoch(
-                    valid_ppl, valid_summary_str, _ = valid_model.run_epoch(
-                        session,
-                        6,
-                        inputs,
-                        outputs,
-                        is_training=False,
-                        verbose=args.verbose,
-                        freq=args.progress_freq)
-
-                    # save and update best model
-                    best_model = best_model_saver.save(
-                        session,
-                        args.save_best_model,
-                        global_step=train_model.global_step)
-                    best_valid_ppl = valid_ppl
-                    valid_writer.add_summary(valid_summary_str, global_step)
-                    valid_writer.flush()
-                    logging.info('Best model is saved in %s', best_model)
-        saver.restore(session, best_model)
+        for i in range(1000):
+            batch_start_time = time.time()
+            inputs, outputs = session.run([inputsOP, outputsOP])
+            print("running batch", i)
+            # training step
+            ppl, train_summary_str, global_step = train_model.run_epoch(
+                session,
+                params['batch_size'],
+                inputs,
+                outputs,
+                is_training=True,
+                verbose=args.verbose,
+                freq=args.progress_freq,
+                divide_by_n=args.n_save)
+            # record the summary
+            train_writer.add_summary(train_summary_str, global_step)
+            train_writer.flush()
+            print("batch took", time.time() - batch_start_time)
         initialStateNames = []
         finalStateNames = []
         for i in test_model.initial_state:
