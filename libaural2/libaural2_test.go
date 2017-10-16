@@ -6,15 +6,6 @@ import (
 	"testing"
 )
 
-//func TestNumericLookup(t *testing.T) {
-//	if NumericToInt[Zero] != 0 {
-//		t.Fail()
-//	}
-//	if NumericToInt[One] != 1 {
-//		t.Fail()
-//	}
-//}
-
 func TestSerialize(t *testing.T) {
 	hash := sha256.Sum256([]byte("some fake raw data"))
 	labelSet := LabelSet{
