@@ -30,15 +30,6 @@ class CharRNN(object):
     self.input_size = input_size
     self.output_size = output_size
     self.input_dropout = 0.0
-    self.model_size = (output_size * output_size + # just for humans, not used by nn
-                       # lstm parameters
-                       4 * hidden_size * (hidden_size + self.input_size + 1) +
-                       # softmax parameters
-                       output_size * (hidden_size + 1) +
-                       # multilayer lstm parameters for extra layers.
-                       (num_layers - 1) * 4 * hidden_size *
-                       (hidden_size + hidden_size + 1))
-    # self.decay_rate = decay_rate
     # Placeholder to feed in input and targets/labels data.
     self.input_data = tf.placeholder(tf.float32,
                                      [self.batch_size, self.num_unrollings, self.input_size],
@@ -161,93 +152,6 @@ class CharRNN(object):
       self.train_op = optimizer.apply_gradients(zip(grads, tvars),
                                                 global_step=self.global_step)
     print("done initing at", time.time() - start_time)
-
-
-  def run_epoch(self, session, data_size, input_data, output_data, is_training,
-                verbose=0, freq=10, summary_writer=None, debug=False, divide_by_n=1):
-    """Runs the model on the given data for one full pass."""
-    start_time = time.time()
-    # epoch_size = ((data_size // self.batch_size) - 1) // self.num_unrollings
-    epoch_size = data_size // (self.batch_size * self.num_unrollings)
-    if data_size % (self.batch_size * self.num_unrollings) != 0:
-        epoch_size += 1
-
-    if verbose > 0:
-        logging.info('epoch_size: %d', epoch_size)
-        logging.info('data_size: %d', data_size)
-        logging.info('num_unrollings: %d', self.num_unrollings)
-        logging.info('batch_size: %d', self.batch_size)
-
-    if is_training:
-      extra_op = self.train_op
-    else:
-      extra_op = tf.no_op()
-
-    # Prepare initial state and reset the average loss
-    # computation.
-    state = session.run(self.zero_state)
-    self.reset_loss_monitor.run()
-    start_time = time.time()
-    for step in range(epoch_size // divide_by_n):
-      inputs = input_data
-      targets = output_data
-
-      ops = [self.average_loss, self.final_state, extra_op,
-             self.summaries, self.global_step, self.learning_rate]
-
-      feed_dict = {self.input_data: inputs, self.targets: targets,
-                   self.initial_state: state}
-
-      results = session.run(ops, feed_dict)
-      average_loss, state, _, summary_str, global_step, lr = results
-
-      ppl = np.exp(average_loss)
-      if (verbose > 0) and ((step+1) % freq == 0):
-        logging.info("%.1f%%, step:%d, perplexity: %.3f, speed: %.0f words",
-                     (step + 1) * 1.0 / epoch_size * 100, step, ppl,
-                     (step + 1) * self.batch_size * self.num_unrollings /
-                     (time.time() - start_time))
-
-    logging.info("Perplexity: %.3f, speed: %.0f words per sec",
-                 ppl, (step + 1) * self.batch_size * self.num_unrollings /
-                 (time.time() - start_time))
-    return ppl, summary_str, global_step
-
-  def sample_seq(self, session, length, start_text, vocab_index_dict,
-                 index_vocab_dict, temperature=1.0, max_prob=True):
-
-    state = session.run(self.zero_state)
-
-    # use start_text to warm up the RNN.
-    if start_text is not None and len(start_text) > 0:
-      seq = list(start_text)
-      for char in start_text[:-1]:
-        x = np.array([[char2id(char, vocab_index_dict)]])
-        state = session.run(self.final_state,
-                            {self.input_data: x,
-                             self.initial_state: state})
-      x = np.array([[char2id(start_text[-1], vocab_index_dict)]])
-    else:
-      vocab_size = len(vocab_index_dict.keys())
-      x = np.array([[np.random.randint(0, vocab_size)]])
-      seq = []
-
-    for i in range(length):
-      state, logits = session.run([self.final_state,
-                                   self.logits],
-                                  {self.input_data: x,
-                                   self.initial_state: state})
-      unnormalized_probs = np.exp((logits - np.max(logits)) / temperature)
-      probs = unnormalized_probs / np.sum(unnormalized_probs)
-
-      if max_prob:
-        sample = np.argmax(probs[0])
-      else:
-        sample = np.random.choice(self.vocab_size, 1, p=probs[0])[0]
-
-      seq.append(id2char(sample, index_vocab_dict))
-      x = np.array([[sample]])
-    return ''.join(seq)
 
 
 

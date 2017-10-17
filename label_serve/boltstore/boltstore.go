@@ -148,5 +148,6 @@ func (db DB) ListAudioClips() (ids []libaural2.ClipID) {
 		}
 		return nil
 	})
+	fmt.Println(len(ids))
 	return
 }

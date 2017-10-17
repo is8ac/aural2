@@ -118,7 +118,7 @@ func ComputeMFCC(s *op.Scope, pcm tf.Output) (mfcc, sampleRatePH tf.Output) {
 	sampleRatePH = op.Placeholder(s.SubScope("sample_rate"), tf.Int32) // MFCC need to know the sample rate.
 	spectrogram := op.AudioSpectrogram(s.SubScope("spectrogram"),      // Compute the spectrogram
 		expanded,
-		1024, // window size
+		int64(libaural2.StrideWidth),              // window size
 		int64(libaural2.StrideWidth),              // stride size
 		op.AudioSpectrogramMagnitudeSquared(true), // square the magnitude
 	)
@@ -131,7 +131,7 @@ func ComputeMFCC(s *op.Scope, pcm tf.Output) (mfcc, sampleRatePH tf.Output) {
 func ComputeSpectrogram(s *op.Scope, pcm tf.Output, freqMin, freqBuf int) (slice tf.Output) {
 	dim := op.Const(s.SubScope("dim"), int32(1))
 	expanded := op.ExpandDims(s.SubScope("expand_dims"), pcm, dim) // again, make AudioSpectrogram happy.
-	spectrograms := op.AudioSpectrogram(s.SubScope("spectrogram"), expanded, 1024, int64(libaural2.StrideWidth))
+	spectrograms := op.AudioSpectrogram(s.SubScope("spectrogram"), expanded, int64(libaural2.StrideWidth), int64(libaural2.StrideWidth))
 	invertedSpectrogram := op.Unpack(s.SubScope("channels"), spectrograms, 1, op.UnpackAxis(0))[0] // and remove the unnecessary dimension
 	reverse := op.Reverse(s.SubScope("reverse"), invertedSpectrogram, op.Const(s.SubScope("reverse_dim"), []bool{false, true}))
 
@@ -237,8 +237,11 @@ func EmbedTrainingData(inputs [][][]float32, outputs [][libaural2.StridesPerClip
 	outputsConst := op.Const(os, outputs)
 	inputsSubSeqs := make([]tf.Output, numSubSeqs)
 	outputsSubSeqs := make([]tf.Output, numSubSeqs)
+
+	seed := rand.NewSource(42)
+	r := rand.New(seed)
 	for i := 0; i < numSubSeqs; i++ {
-		start := rand.Intn(libaural2.StridesPerClip - libaural2.SeqLen)
+		start := r.Intn(libaural2.StridesPerClip - libaural2.SeqLen)
 
 		inputsBegin := op.Const(is.SubScope("begin"), []int32{0, int32(start), 0})
 		inputsSize := op.Const(is.SubScope("size"), []int32{int32(len(inputs)), int32(libaural2.SeqLen), int32(libaural2.InputSize)})
@@ -257,7 +260,7 @@ func EmbedTrainingData(inputs [][][]float32, outputs [][libaural2.StridesPerClip
 	indicesShape := op.Const(s.SubScope("indices_shape"), []int32{int32(batchSize)})
 	min := op.Const(s.SubScope("min"), int32(0))
 	max := op.Const(s.SubScope("max"), int32(len(inputs)*numSubSeqs))
-	indices := op.RandomUniformInt(s, indicesShape, min, max)
+	indices := op.RandomUniformInt(s, indicesShape, min, max, op.RandomUniformIntSeed(42))
 	inputBatch := op.Gather(is, concatInputs, indices)
 	outputBatch := op.Gather(os, concatOutputs, indices)
 

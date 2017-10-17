@@ -26,7 +26,7 @@ const StrideWidth int = 512
 const SamplePerClip int = SampleRate * Duration
 
 // StridesPerClip is the number of strides per clip
-const StridesPerClip int = SamplePerClip/StrideWidth - 1
+const StridesPerClip int = SamplePerClip / StrideWidth
 
 // SeqLen is the length of sequences to be feed to the LSTM for training.
 const SeqLen int = 50
@@ -38,10 +38,10 @@ const AudioClipLen int = SamplePerClip * 2
 const InputSize int = 13
 
 // OutputSize is the number of commands. Increase when adding new Cmds!
-const OutputSize int = 4
+const OutputSize int = 40
 
 // BatchSize is the size of the one batch
-const BatchSize int = 2
+const BatchSize int = 10
 
 // CmdList is a list of Cmds
 type CmdList [StridesPerClip]Cmd
@@ -201,52 +201,80 @@ const (
 	Unknown
 	Yes
 	No
+	True
+	False
 	CtrlC
 	Sudo
-	Tab
-	Return
-	Train
 	Mpc
 	Play
 	Pause
-	True
-	False
-	Wrong
-	Grep
+	Stop
+	OK
+	Set
+	Is
 	What
 	Same
 	Different
 	When
 	Who
+	Where
 	OKgoogle
 	Alexa
+	Music
+	Genre
+	Classical
+	Plainsong
+	Vocaloid
+	Reggae
+	Rock
+	RockAndRoll
+	Rap
+	HipHop
+	Blues
+	Shakuhachi
+	Yotsugi
+	Grep
 )
 
 // CmdToString converts a cmd to the cmds name.
 var CmdToString = map[Cmd]string{
-	Nil:       "nil",
-	Unknown:   "Unknown",
-	Yes:       "Yes",
-	No:        "No",
-	CtrlC:     "CtrlC",
-	Sudo:      "Sudo",
-	Tab:       "Tab",
-	Return:    "Return",
-	Train:     "Train",
-	Mpc:       "Mpc",
-	Play:      "Play",
-	Pause:     "Pause",
-	True:      "True",
-	False:     "False",
-	Wrong:     "Wrong",
-	Grep:      "Grep",
-	What:      "What",
-	Same:      "Same",
-	Different: "Different",
-	When:      "When",
-	Who:       "Who",
-	OKgoogle:  "OKgoogle",
-	Alexa:     "Alexa",
+	Nil:         "Nil",
+	Unknown:     "Unknown",
+	Yes:         "Yes",
+	No:          "No",
+	True:        "True",
+	False:       "False",
+	CtrlC:       "CtrlC",
+	Sudo:        "Sudo",
+	Mpc:         "Mpc",
+	Play:        "Play",
+	Pause:       "Pause",
+	Stop:        "Stop",
+	OK:          "OK",
+	Set:         "Set",
+	Is:          "Is",
+	What:        "What",
+	Same:        "Same",
+	Different:   "Different",
+	When:        "When",
+	Who:         "Who",
+	Where:       "Where",
+	OKgoogle:    "OKgoogle",
+	Alexa:       "Alexa",
+	Music:       "Music",
+	Genre:       "Genre",
+	Classical:   "Classical",
+	Plainsong:   "Plainsong",
+	Vocaloid:    "Vocaloid",
+	Reggae:      "Reggae",
+	Rock:        "Rock",
+	RockAndRoll: "RockAndRoll",
+	Rap:         "Rap",
+	HipHop:      "HipHop",
+	Blues:       "Blues",
+	Shakuhachi:  "Shakuhachi",
+	Grep:        "Grep",
+	Yotsugi:     "Yotsugi",
 }
 
 // GenFakeLabelSet creates a fake LabelSet for testing.

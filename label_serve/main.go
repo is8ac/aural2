@@ -159,7 +159,7 @@ func makeServeTrainingDataGraphdef(getAllLabelSets func() (map[libaural2.ClipID]
 			outputs = append(outputs, labelSet.ToCmdIDArray())
 			ids = append(ids, id)
 		}
-		graph, err := tfutils.EmbedTrainingData(inputs, outputs, ids, 7, 20) // take 7 sub seqs, and batch size of 20
+		graph, err := tfutils.EmbedTrainingData(inputs, outputs, ids, 8, libaural2.BatchSize) // take 8 sub seqs, and batch size of 10
 		if err != nil {
 			logger.Println(err)
 			http.Error(w, "", http.StatusInternalServerError)
