@@ -535,9 +535,8 @@ func TestMakeCleanWav(t *testing.T) {
 	}
 }
 
-func TestEmbedTrainingData(t *testing.T) {
-	hash := libaural2.ClipID{}
-	labelSets := []libaural2.LabelSet{
+var hash = libaural2.ClipID{}
+var labelSets = []libaural2.LabelSet{
 		libaural2.LabelSet{
 			ID: hash,
 			Labels: []libaural2.Label{
@@ -599,6 +598,9 @@ func TestEmbedTrainingData(t *testing.T) {
 			},
 		},
 	}
+
+
+func TestEmbedTrainingData(t *testing.T) {
 	var inputs [][][]float32
 	var outputs [][libaural2.StridesPerClip]int32
 	var ids []libaural2.ClipID
@@ -613,7 +615,9 @@ func TestEmbedTrainingData(t *testing.T) {
 		outputs = append(outputs, labelSet.ToCmdIDArray())
 		ids = append(ids, labelSet.ID)
 	}
-	graph, err := EmbedTrainingData(inputs, outputs, ids)
+	numSubSeqs := 5
+	batchSize := 10
+	graph, err := EmbedTrainingData(inputs, outputs, ids, numSubSeqs, batchSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -659,11 +663,14 @@ func TestEmbedTrainingData(t *testing.T) {
 	if len(clipHashesShape) != 2 {
 		t.Fatal("clip shapes wrong dims")
 	}
-	outerDimLen := int64(len(labelSets))
-	if inputShape[0] != outerDimLen || outputShape[0] != outerDimLen || clipHashesShape[0] != outerDimLen {
+	if clipHashesShape[0] != int64(len(labelSets)) {
+		t.Fatal(err)
+	}
+	outerDimLen := int64(batchSize)
+	if inputShape[0] != outerDimLen || outputShape[0] != outerDimLen {
 		t.Fatal("outerDim is wrong")
 	}
-	secondDimLen := int64(libaural2.StridesPerClip)
+	secondDimLen := int64(libaural2.SeqLen)
 	if inputShape[1] != secondDimLen || outputShape[1] != secondDimLen {
 		t.Fatal("second dim is wrong")
 	}
@@ -674,4 +681,45 @@ func TestEmbedTrainingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func genFakeLabelSet()(output libaural2.LabelSet) {
+	output.Labels = []libaural2.Label{
+		libaural2.Label{
+			Cmd: libaural2.Nil,
+			Start: 0,
+			End: 1,
+		},
+		libaural2.Label{
+			Cmd: libaural2.Yes,
+			Start: 1,
+			End: 2,
+		},
+		libaural2.Label{
+			Cmd: libaural2.No,
+			Start: 2,
+			End: 3,
+		},
+		libaural2.Label{
+			Cmd: libaural2.Nil,
+			Start: 4,
+			End: 5,
+		},
+		libaural2.Label{
+			Cmd: libaural2.Yes,
+			Start: 6,
+			End: 7,
+		},
+		libaural2.Label{
+			Cmd: libaural2.No,
+			Start: 8,
+			End: 9,
+		},
+		libaural2.Label{
+			Cmd: libaural2.Nil,
+			Start: 9,
+			End: 10,
+		},
+	}
+	return
 }

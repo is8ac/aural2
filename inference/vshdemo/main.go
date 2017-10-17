@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"strconv"
 
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 
@@ -22,9 +21,9 @@ const outputname = "evaluation/softmax/output"
 const inputname = "evaluation/input"
 
 // loadGraph loads the graphDef file from the fs, and returns a tf.SavedModel
-func loadGraph() (session *tf.Session, input, output tf.Output, statePlaceholders, stateFetches []tf.Output, stateFeeds map[tf.Output]*tf.Tensor, err error) {
+func loadGraph(path string) (session *tf.Session, input, output tf.Output, statePlaceholders, stateFetches []tf.Output, stateFeeds map[tf.Output]*tf.Tensor, err error) {
 	// read the serialised graphDef file.
-	graphBytes, err := ioutil.ReadFile("models/cmd_rnn.pb")
+	graphBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		logger.Println(err)
 		return
@@ -160,47 +159,54 @@ func argmax(probs []float32) (index int32) {
 	return
 }
 
-func computeMFCC() (mfcc [][]float32, err error) {
+func computeFakeMFCCs() (mfccs [][]float32, err error) {
+	labelSet := libaural2.GenFakeLabelSet()
+	mfccs = libaural2.GenFakeInput(labelSet.ToCmdIDArray())
+	return
+}
+
+func makeComputeMFCCgraph() (computeMFCC func([]byte) (*tf.Tensor, error), err error) {
 	s := op.NewScope()
-	bytesPH, pcm := tfutils.ParseRawBytesToPCM(s)
+	rawBytesPH, pcm := tfutils.ParseRawBytesToPCM(s)
 	mfccOP, sampleRatePH := tfutils.ComputeMFCC(s.SubScope("spectrogram"), pcm)
+	dim := op.Const(s, int32(0))
+	expanded := op.ExpandDims(s, mfccOP, dim)
 	sampleRateTensor, err := tf.NewTensor(int32(libaural2.SampleRate))
 	if err != nil {
-		logger.Fatalln(err)
+		return
 	}
 	graph, err := s.Finalize() // finalize the scope to get the graph
 	if err != nil {
-		logger.Fatalln(err)
+		return
 	}
 	sess, err := tf.NewSession(graph, nil) // start a new TF session
 	if err != nil {
-		logger.Fatalln(err)
-	}
-	rawBytes, err := ioutil.ReadFile("label_serve/audio/QAKZAMTDHFVNZ6QLPIBFYYSRQN2Y43IHU76ZQN6L6C22OWLR66RQ====.raw")
-	if err != nil {
 		return
 	}
-	if len(rawBytes) != libaural2.AudioClipLen {
-		err = errors.New("Got " + strconv.Itoa(len(rawBytes)) + " bytes, expected" + strconv.Itoa(libaural2.AudioClipLen))
+	computeMFCC = func(rawBytes []byte) (mfccTensor *tf.Tensor, err error) {
+		rawBytesTensor, err := tf.NewTensor(string(rawBytes[:])) // create a string tensor from the input bytes
+		if err != nil {
+			return
+		}
+		result, err := sess.Run(map[tf.Output]*tf.Tensor{rawBytesPH: rawBytesTensor, sampleRatePH: sampleRateTensor}, []tf.Output{expanded}, nil)
+		if err != nil {
+			return
+		}
+		//logger.Println(result[0].Shape())
+		//logger.Println(result[0].Value())
+		if result[0].Shape()[0] != 1 {
+			err = errors.New("bad shape")
+			return
+		}
+		mfccTensor = result[0]
 		return
 	}
-	clipTensor, err := tf.NewTensor(string(rawBytes)) // create a string tensor from the input bytes
-	if err != nil {
-		logger.Println(err)
-		return
-	}
-	result, err := sess.Run(map[tf.Output]*tf.Tensor{bytesPH: clipTensor, sampleRatePH: sampleRateTensor}, []tf.Output{mfccOP}, nil)
-	if err != nil {
-		logger.Println(err)
-		return
-	}
-
-	mfcc = result[0].Value().([][]float32)
 	return
 }
 
 func main() {
-	sess, input, output, placeholders, fetches, feeds, err := loadGraph() // load in the graph
+	modelPath := os.Args[1]
+	sess, input, output, placeholders, fetches, feeds, err := loadGraph(modelPath) // load in the graph
 	// sess: the TF session
 	// input: the placeholder to be populated with the input data each iteration
 	// output: the output from which can be pulled on to give the result each iteration
@@ -212,17 +218,30 @@ func main() {
 		logger.Fatalln(err)
 	}
 	fetches = append(fetches, output) // also pull on output
-	mfccs, err := computeMFCC()
+	computeMFCC, err := makeComputeMFCCgraph()
 	if err != nil {
 		logger.Fatalln(err)
 	}
 	// Run
-	for _, mfcc := range mfccs {
-		inputTensor, err := tf.NewTensor([][][]float32{[][]float32{mfcc}})
+	//reader, err := arecordcapture.Start()
+	//if err != nil {
+	//	logger.Fatalln(err)
+	//}
+	reader := os.Stdin
+	buff := make([]byte, libaural2.StrideWidth*2)
+	for {
+		n, err := reader.Read(buff)
 		if err != nil {
 			logger.Fatalln(err)
 		}
-		feeds[input] = inputTensor // feed the input
+		if n != libaural2.StrideWidth*2 {
+			//logger.Println(n)
+		}
+		mfccTensor, err := computeMFCC(buff)
+		if err != nil {
+			logger.Fatalln(err)
+		}
+		feeds[input] = mfccTensor // feed the input
 		results, err := sess.Run(
 			feeds,
 			fetches,
@@ -232,12 +251,10 @@ func main() {
 			logger.Fatalln(err)
 		}
 		probs := results[len(fetches)-1].Value().([][]float32)[0]
-		//logger.Println(probs)
 		cmd := libaural2.Cmd(argmax(probs))
 		for i, ph := range placeholders {
 			feeds[ph] = results[i]
 		}
-		_ = cmd
 		fmt.Println(cmd)
 	}
 	println("")

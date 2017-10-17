@@ -39,7 +39,14 @@ func createLabelMarker(label la.Label) (setEnd func(float64)) {
 	labelDiv.SetInnerHTML("<p class='cmd_label'>" + label.Cmd.String() + "</p>")
 	labelDiv.Style().SetProperty("background-color", colorToCSSstring(label.Cmd), "")
 	labelsContainer.AppendChild(labelDiv)
-
+	labelDiv.AddEventListener("click", false, func(arg3 dom.Event) {
+		labelsContainer.RemoveChild(labelDiv)
+		for i, otherLabel := range labelsSet.Labels {
+			if otherLabel.Start == label.Start {
+				labelsSet.Labels = append(labelsSet.Labels[:i], labelsSet.Labels[i+1:]...)
+			}
+		}
+	})
 	setEnd = func(end float64) {
 		width := (end - label.Start) / float64(la.Duration)
 		labelDiv.Style().Set("width", strconv.FormatFloat(width*100, 'f', 8, 64)+"%")
@@ -84,22 +91,42 @@ var clipID la.ClipID
 var labelsSet la.LabelSet
 
 var keyToCmd = map[string]la.Cmd{
-	"u": la.Unknown,
+	"?": la.Unknown,
 	"y": la.Yes,
 	"n": la.No,
-	"0": la.Zero,
-	"1": la.One,
-	"2": la.Two,
-	"3": la.Three,
-	"4": la.Four,
-	"5": la.Five,
-	"6": la.Six,
-	"7": la.Seven,
-	"8": la.Eight,
-	"9": la.Nine,
-	"c": la.CtrlC,
 	"t": la.True,
 	"f": la.False,
+	"C": la.CtrlC,
+	"S": la.Sudo,
+	"M": la.Mpc,
+	">": la.Play,
+	"<": la.Pause,
+	"|": la.Stop,
+	"O": la.OK,
+	"s": la.Set,
+	"i": la.Is,
+	"h": la.What,
+	"=": la.Same,
+	";": la.Different,
+	"T": la.When,
+	"w": la.Who,
+	"L": la.Where,
+	"G": la.OKgoogle,
+	"A": la.Alexa,
+	"m": la.Music,
+	"g": la.Genre,
+	"c": la.Classical,
+	"p": la.Plainsong,
+	"v": la.Vocaloid,
+	"r": la.Reggae,
+	"!": la.Rock,
+	"N": la.RockAndRoll,
+	"$": la.Rap,
+	"d": la.HipHop,
+	"b": la.Blues,
+	"j": la.Shakuhachi,
+	"x": la.Grep,
+	"Y": la.Yotsugi,
 }
 
 func start() {
@@ -170,9 +197,9 @@ func start() {
 				continue
 			}
 		}
-		if ke.Key == "s" {
-			go postLabelsSet(labelsSet)
-		}
+		//if ke.Key == "s" {
+		//	go postLabelsSet(labelsSet)
+		//}
 		if ke.Key == "Delete" {
 			labelsSet.Labels = []la.Label{}
 			labelsElm := d.GetElementByID("labels").(*dom.HTMLDivElement)

@@ -6,15 +6,6 @@ import (
 	"testing"
 )
 
-func TestNumericLookup(t *testing.T) {
-	if NumericToInt[Zero] != 0 {
-		t.Fail()
-	}
-	if NumericToInt[One] != 1 {
-		t.Fail()
-	}
-}
-
 func TestSerialize(t *testing.T) {
 	hash := sha256.Sum256([]byte("some fake raw data"))
 	labelSet := LabelSet{
@@ -50,34 +41,34 @@ func TestToCmdArray(t *testing.T) {
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:   Who,
+				Cmd:   Yes,
 				Start: 0.23,
 				End:   1.23,
 			},
 			Label{
-				Cmd:   Yes,
+				Cmd:   Nil,
 				Start: 2.23,
 				End:   3.23,
 			},
 			Label{
-				Cmd:   Seven,
+				Cmd:   No,
 				Start: 4.23,
 				End:   5.23,
 			},
 			Label{
-				Cmd:   Alexa,
+				Cmd:   Unknown,
 				Start: 6.23,
 				End:   7.23,
 			},
 			Label{
-				Cmd:   What,
+				Cmd:   No,
 				Start: 8.23,
 				End:   9.23,
 			},
 		},
 	}
 	cmdArray := labelSet.ToCmdArray()
-	if cmdArray[0] != Silence {
+	if cmdArray[0] != Nil {
 		t.Fatal("!silence")
 	}
 }
@@ -88,7 +79,7 @@ func TestIsGood(t *testing.T) {
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:   Who,
+				Cmd:   No,
 				Start: 0.23,
 				End:   1.23,
 			},
@@ -98,17 +89,17 @@ func TestIsGood(t *testing.T) {
 				End:   3.23,
 			},
 			Label{
-				Cmd:   Seven,
+				Cmd:   No,
 				Start: 4.23,
 				End:   5.23,
 			},
 			Label{
-				Cmd:   Alexa,
+				Cmd:   Yes,
 				Start: 6.23,
 				End:   7.23,
 			},
 			Label{
-				Cmd:   What,
+				Cmd:   Unknown,
 				Start: 8.23,
 				End:   9.23,
 			},
@@ -121,7 +112,7 @@ func TestIsGood(t *testing.T) {
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:   Who,
+				Cmd:   No,
 				Start: 0.23,
 				End:   3.4,
 			},
@@ -139,7 +130,7 @@ func TestIsGood(t *testing.T) {
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:   Who,
+				Cmd:   No,
 				Start: -2.0,
 				End:   3.4,
 			},
