@@ -1,13 +1,22 @@
 package main
 
 import (
+	"encoding/base32"
+	"errors"
 	"fmt"
 
 	"github.com/boltdb/bolt"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 )
 
-func initDB() (put func(libaural2.LabelSet) error, get func(libaural2.ClipID) (libaural2.LabelSet, error), getAll func() (map[libaural2.ClipID]libaural2.LabelSet, error), close func(), err error) {
+func initDB() (
+	put func(libaural2.LabelSet) error,
+	get func(libaural2.ClipID) (libaural2.LabelSet, error),
+	getAll func() (map[libaural2.ClipID]libaural2.LabelSet, error),
+	list func() []libaural2.ClipID,
+	close func(),
+	err error,
+	) {
 	db, err := bolt.Open("label_serve.db", 0600, nil)
 	if err != nil {
 		return
@@ -66,6 +75,31 @@ func initDB() (put func(libaural2.LabelSet) error, get func(libaural2.ClipID) (l
 				var clipID libaural2.ClipID
 				copy(clipID[:], k)
 				labelSets[clipID] = labelSet
+			}
+			return nil
+		})
+		return
+	}
+	list = func() (ids []libaural2.ClipID) {
+		db.View(func(tx *bolt.Tx) error {
+			// Assume bucket exists and has keys
+			b := tx.Bucket([]byte("labelsets"))
+			c := b.Cursor()
+			for k, v := c.First(); k != nil; k, v = c.Next() {
+				_ = v
+				logger.Println("iter")
+				clipIDBytes, err := base32.StdEncoding.DecodeString(string(k))
+				if err != nil {
+					return err
+				}
+				if len(clipIDBytes) != 32 {
+					err = errors.New("hash length must be 32 bytes")
+					return err
+				}
+				var clipID libaural2.ClipID
+				copy(clipID[:], clipIDBytes)
+				logger.Println(clipID)
+				ids = append(ids, clipID)
 			}
 			return nil
 		})

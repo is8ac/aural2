@@ -535,24 +535,25 @@ func TestMakeCleanWav(t *testing.T) {
 	}
 }
 
-
-func TestEmbedTrainingData(t *testing.T) {
-	hash := libaural2.ClipID{}
-	labelSets := []libaural2.LabelSet{
+var hash = libaural2.ClipID{}
+var labelSets = []libaural2.LabelSet{
 		libaural2.LabelSet{
 			ID: hash,
 			Labels: []libaural2.Label{
 				libaural2.Label{
-					Cmd:  libaural2.Who,
-					Time: 1.23,
+					Cmd:   libaural2.Who,
+					Start: 1.23,
+					End:   2.8,
 				},
 				libaural2.Label{
-					Cmd:  libaural2.What,
-					Time: 4.03,
+					Cmd:   libaural2.What,
+					Start: 3.23,
+					End:   4.8,
 				},
 				libaural2.Label{
-					Cmd:  libaural2.When,
-					Time: 9.20,
+					Cmd:   libaural2.When,
+					Start: 5.23,
+					End:   6.8,
 				},
 			},
 		},
@@ -560,12 +561,14 @@ func TestEmbedTrainingData(t *testing.T) {
 			ID: hash,
 			Labels: []libaural2.Label{
 				libaural2.Label{
-					Cmd:  libaural2.Yes,
-					Time: 0.93,
+					Cmd:   libaural2.Yes,
+					Start: 1.23,
+					End:   2.8,
 				},
 				libaural2.Label{
-					Cmd:  libaural2.No,
-					Time: 9.02,
+					Cmd:   libaural2.No,
+					Start: 3.23,
+					End:   4.8,
 				},
 			},
 		},
@@ -574,7 +577,8 @@ func TestEmbedTrainingData(t *testing.T) {
 			Labels: []libaural2.Label{
 				libaural2.Label{
 					Cmd:  libaural2.OKgoogle,
-					Time: 5.723,
+					Start: 1.23,
+					End: 2.8,
 				},
 			},
 		},
@@ -583,15 +587,20 @@ func TestEmbedTrainingData(t *testing.T) {
 			Labels: []libaural2.Label{
 				libaural2.Label{
 					Cmd:  libaural2.Alexa,
-					Time: 9.53,
+					Start: 1.95,
+					End: 2.8,
 				},
 				libaural2.Label{
 					Cmd:  libaural2.CtrlC,
-					Time: 2.7,
+					Start: 3.23,
+					End: 4.02,
 				},
 			},
 		},
 	}
+
+
+func TestEmbedTrainingData(t *testing.T) {
 	var inputs [][][]float32
 	var outputs [][libaural2.StridesPerClip]int32
 	var ids []libaural2.ClipID
@@ -603,10 +612,12 @@ func TestEmbedTrainingData(t *testing.T) {
 			input[i] = mfcc
 		}
 		inputs = append(inputs, input)
-		outputs = append(outputs, labelSet.ToCmdArray())
+		outputs = append(outputs, labelSet.ToCmdIDArray())
 		ids = append(ids, labelSet.ID)
 	}
-	graph, err := EmbedTrainingData(inputs, outputs, ids)
+	numSubSeqs := 5
+	batchSize := 10
+	graph, err := EmbedTrainingData(inputs, outputs, ids, numSubSeqs, batchSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -652,11 +663,14 @@ func TestEmbedTrainingData(t *testing.T) {
 	if len(clipHashesShape) != 2 {
 		t.Fatal("clip shapes wrong dims")
 	}
-	outerDimLen := int64(len(labelSets))
-	if inputShape[0] != outerDimLen || outputShape[0] != outerDimLen || clipHashesShape[0] != outerDimLen {
+	if clipHashesShape[0] != int64(len(labelSets)) {
+		t.Fatal(err)
+	}
+	outerDimLen := int64(batchSize)
+	if inputShape[0] != outerDimLen || outputShape[0] != outerDimLen {
 		t.Fatal("outerDim is wrong")
 	}
-	secondDimLen := int64(libaural2.StridesPerClip)
+	secondDimLen := int64(libaural2.SeqLen)
 	if inputShape[1] != secondDimLen || outputShape[1] != secondDimLen {
 		t.Fatal("second dim is wrong")
 	}
@@ -667,4 +681,45 @@ func TestEmbedTrainingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func genFakeLabelSet()(output libaural2.LabelSet) {
+	output.Labels = []libaural2.Label{
+		libaural2.Label{
+			Cmd: libaural2.Nil,
+			Start: 0,
+			End: 1,
+		},
+		libaural2.Label{
+			Cmd: libaural2.Yes,
+			Start: 1,
+			End: 2,
+		},
+		libaural2.Label{
+			Cmd: libaural2.No,
+			Start: 2,
+			End: 3,
+		},
+		libaural2.Label{
+			Cmd: libaural2.Nil,
+			Start: 4,
+			End: 5,
+		},
+		libaural2.Label{
+			Cmd: libaural2.Yes,
+			Start: 6,
+			End: 7,
+		},
+		libaural2.Label{
+			Cmd: libaural2.No,
+			Start: 8,
+			End: 9,
+		},
+		libaural2.Label{
+			Cmd: libaural2.Nil,
+			Start: 9,
+			End: 10,
+		},
+	}
+	return
 }

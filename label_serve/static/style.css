@@ -44,13 +44,16 @@ body {
   height: 10%;
 }
 
+#labels-container {
+  height: 10%;
+}
+
+#labelset{
+  height: 10%;
+}
+
 .label{
   width: 5px;
   height: 10%;
   position: absolute;
-}
-
-.cmd_label{
-  position: relative;
-  left: -40px;
 }
