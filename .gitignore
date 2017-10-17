@@ -3,6 +3,7 @@ models/
 data/
 
 *.wav
+*.flac
 *.ogg
 *.raw
 *.jpeg
