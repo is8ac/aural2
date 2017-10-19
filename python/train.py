@@ -17,8 +17,7 @@ import time
 
 
 def main():
-    params = json.loads('''
-            {
+    params = {
             "batch_size": 10,
             "dropout": 0.0,
             "embedding_size": 0,
@@ -27,13 +26,12 @@ def main():
             "input_size": 13,
             "learning_rate": 0.002,
             "max_grad_norm": 5.0,
-            "model": "lstm",
             "num_layers": 2,
             "num_unrollings": 50,
-            "output_size": 40
+            "full_seq_len": 312,
+            "output_size": 40,
+            "num_batches": 2000,
             }
-            ''')
-    #logging.info('Parameters are:\n%s\n', json.dumps(params, sort_keys=True, indent=4))
 
     # Create graphs
     print('Creating graph')
@@ -41,10 +39,36 @@ def main():
     with graph.as_default():
         # make graphs for training
         with tf.name_scope('training'):
-            train_model = CharRNN(is_training=True, use_batch=True, **params)
+            train_model = CharRNN(params, is_training=True, use_batch=True, seq_len=params['num_unrollings'])
         tf.get_variable_scope().reuse_variables()
-        with tf.name_scope('evaluation'):
-            test_model = CharRNN(is_training=False, use_batch=False, **params)
+        # make graph for doing inference one mfcc at a time.
+        with tf.name_scope('step_inference'):
+            step_inference_model = CharRNN(params, is_training=False, use_batch=False, seq_len=1)
+            initialStateNames = []
+            finalStateNames = []
+            for i in step_inference_model.initial_state:
+                initialStateNames.append(i.c.op.name)
+                initialStateNames.append(i.h.op.name)
+            for i in step_inference_model.final_state:
+                finalStateNames.append(i.c.op.name)
+                finalStateNames.append(i.h.op.name)
+            step_initialStateConst = tf.constant(initialStateNames, name="initial_state_names")
+            step_finalStateNamesConst = tf.constant(finalStateNames, name="final_state_names")
+        # make graph for doing inference on a full length sequence
+        with tf.name_scope('seq_inference'):
+            seq_inference_model = CharRNN(params, is_training=False, use_batch=False, seq_len=params['full_seq_len'])
+            initialStateNames = []
+            finalStateNames = []
+            for i in seq_inference_model.initial_state:
+                initialStateNames.append(i.c.op.name)
+                initialStateNames.append(i.h.op.name)
+            for i in seq_inference_model.final_state:
+                finalStateNames.append(i.c.op.name)
+                finalStateNames.append(i.h.op.name)
+            seq_initialStateConst = tf.constant(initialStateNames, name="initial_state_names")
+            seq_finalStateNamesConst = tf.constant(finalStateNames, name="final_state_names")
+
+
 
     print('Start training\n')
 
@@ -66,7 +90,7 @@ def main():
 
         print("done creating tf writers")
         tf.global_variables_initializer().run()
-        for i in range(2000):
+        for i in range(params['num_batches']):
             batch_start_time = time.time()
             inputs, targets = session.run([inputsOP, outputsOP])
             # training step
@@ -88,26 +112,23 @@ def main():
             train_writer.flush()
             print("batch:", i, "ppl:", ppl, "time:", time.time() - batch_start_time)
 
-        initialStateNames = []
-        finalStateNames = []
-        for i in test_model.initial_state:
-            initialStateNames.append(i.c.name)
-            initialStateNames.append(i.h.name)
-        for i in test_model.final_state:
-            finalStateNames.append(i.c.name)
-            finalStateNames.append(i.h.name)
-
-        initialStateConst = tf.constant(initialStateNames, name="initial_state_names")
-        finalStateNamesConst = tf.constant(finalStateNames, name="final_state_names")
         zeros = tf.zeros([1, params['hidden_size']], dtype=tf.float32, name="zeros")
         frozenGraph = graph_util.convert_variables_to_constants( # freeze the graph
             session,
             tf.get_default_graph().as_graph_def(), # use the default graph
-            ["evaluation/input", "evaluation/softmax/output", "initial_state_names", "final_state_names", "zeros"], # preserve all these OPs
+            [
+            step_inference_model.input_data.op.name,
+            step_inference_model.probs.op.name,
+            step_initialStateConst.op.name,
+            step_finalStateNamesConst.op.name,
+            seq_inference_model.input_data.op.name,
+            seq_inference_model.probs.op.name,
+            seq_initialStateConst.op.name,
+            seq_finalStateNamesConst.op.name,
+            zeros.op.name
+            ], # preserve all these OPs
         )
         tf.train.write_graph(frozenGraph, 'models', 'cmd_rnn.pb', as_text=False)
-
-        #test_ppl, _, _ = test_model.run_epoch(session, test_size, test_batches, is_training=False, verbose=args.verbose, freq=args.progress_freq)
 
 
 

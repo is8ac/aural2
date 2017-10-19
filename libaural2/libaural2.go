@@ -52,7 +52,7 @@ type Input [InputSize]float32
 // InputSet is the set of inputs for one clip.
 type InputSet [StridesPerClip]Input
 
-// Output is one output, the onehot array of Cmds.
+// Output is one output, the softmax array of Cmds.
 type Output [OutputSize]float32
 
 // OutputSet is the set of outputs for one clip.

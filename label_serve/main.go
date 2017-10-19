@@ -128,7 +128,6 @@ func makeServeTrainingDataGraphdef(getAllLabelSets func() (map[libaural2.ClipID]
 		var ids []libaural2.ClipID
 		// iterate over the clips
 		for id, labelSet := range labelSets {
-			//labelSet = libaural2.GenFakeLabelSet()
 			audioClip, err := getAudioClipFromFS(id)
 			if err != nil {
 				logger.Println(err)
@@ -338,6 +337,10 @@ func main() {
 	if err != nil {
 		logger.Fatalln(err)
 	}
+	renderProbs, err := makeRenderProbs()
+	if err != nil {
+		logger.Fatalln(err)
+	}
 	serializeLabelSet := func(labelSet libaural2.LabelSet) (serialized []byte, err error) {
 		serialized, err = labelSet.Serialize()
 		return
@@ -346,6 +349,7 @@ func main() {
 	// with makeServeAudioDerivedBlob(), we convert the blob conversion func into a request handler.
 	r.HandleFunc("/images/spectrogram/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderSpectrogram))
 	r.HandleFunc("/images/mfcc/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderMFCC))
+	r.HandleFunc("/images/probs/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderProbs))
 	r.HandleFunc("/images/labelset/{sampleID}.png", makeServeLabelsSetDerivedBlob(db.GetLabelSet, renderColorLabelSetImage))
 	r.HandleFunc("/audio/{sampleID}.wav", makeServeAudioDerivedBlob(computeWav))
 	r.HandleFunc("/tagui/{sampleID}", makeServeTagUI())

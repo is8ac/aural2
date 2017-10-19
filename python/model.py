@@ -11,58 +11,48 @@ logging.getLogger('tensorflow').setLevel(logging.WARNING)
 class CharRNN(object):
   """Character RNN model."""
 
-  def __init__(self, is_training, batch_size, num_unrollings,
-               hidden_size, max_grad_norm, embedding_size, num_layers,
-               learning_rate, model, input_size, output_size, dropout=0.0, input_dropout=0.0, use_batch=True):
-    start_time = time.time()
-    self.batch_size = batch_size
-    self.num_unrollings = num_unrollings
+  def __init__(self, params, is_training=True, use_batch=True, seq_len=7):
+    batch_size = params['batch_size']
+    num_unrollings = seq_len
     if not use_batch:
-      self.batch_size = 1
-      self.num_unrollings = 1
-    self.hidden_size = hidden_size
-    self.max_grad_norm = max_grad_norm
-    self.num_layers = num_layers
-    self.embedding_size = embedding_size
-    self.model = model
-    self.dropout = dropout
-    self.input_dropout = input_dropout
-    self.input_size = input_size
-    self.output_size = output_size
-    self.input_dropout = 0.0
+      batch_size = 1
+    hidden_size = params['hidden_size']
+    max_grad_norm = params['max_grad_norm']
+    num_layers = params['num_layers']
+    embedding_size = params['embedding_size']
+    dropout = params['dropout']
+    input_dropout = params['input_dropout']
+    input_size = params['input_size']
+    output_size = params['output_size']
+    learning_rate = params['learning_rate']
     # Placeholder to feed in input and targets/labels data.
     self.input_data = tf.placeholder(tf.float32,
-                                     [self.batch_size, self.num_unrollings, self.input_size],
-                                     name='input')
+                                     [batch_size, num_unrollings, input_size],
+                                     name='inputs')
     self.targets = tf.placeholder(tf.int32,
-                                  [self.batch_size, self.num_unrollings,],
+                                  [batch_size, num_unrollings,],
                                   name='targets')
 
     cell_fn = tf.contrib.rnn.BasicLSTMCell
 
-    params = {}
-    # add bias to forget gate in lstm.
-    params['forget_bias'] = 0.0
-    params['state_is_tuple'] = True
-    # Create multilayer cell.
-    cell = cell_fn(self.hidden_size, reuse=tf.get_variable_scope().reuse, **params)
+    cell = cell_fn(hidden_size, reuse=tf.get_variable_scope().reuse, forget_bias=0.0, state_is_tuple=True)
 
     cells = [cell]
     # params['input_size'] = self.hidden_size
     # more explicit way to create cells for MultiRNNCell than
     # [higher_layer_cell] * (self.num_layers - 1)
-    for i in range(self.num_layers-1):
-      higher_layer_cell = cell_fn(self.hidden_size, reuse=tf.get_variable_scope().reuse, **params)
+    for i in range(num_layers-1):
+      higher_layer_cell = cell_fn(hidden_size, reuse=tf.get_variable_scope().reuse, forget_bias=0.0, state_is_tuple=True)
       cells.append(higher_layer_cell)
 
-    if is_training and self.dropout > 0:
+    if is_training and dropout > 0:
       cells = [tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=1.0-self.dropout) for cell in cells]
 
     multi_cell = tf.contrib.rnn.MultiRNNCell(cells)
 
     with tf.name_scope('initial_state'):
       # zero_state is used to compute the intial state for cell.
-      self.zero_state = multi_cell.zero_state(self.batch_size, tf.float32)
+      self.zero_state = multi_cell.zero_state(batch_size, tf.float32)
       # Placeholder to feed in initial state.
       # self.initial_state = tf.placeholder(
       #   tf.float32,
@@ -76,7 +66,7 @@ class CharRNN(object):
 
     with tf.name_scope('slice_inputs'):
       # Slice inputs into a list of shape [batch_size, 1] data colums.
-      sliced_inputs = [tf.squeeze(input_, [1]) for input_ in tf.split(axis=1, num_or_size_splits=self.num_unrollings, value=self.input_data)]
+      sliced_inputs = [tf.squeeze(input_, [1]) for input_ in tf.split(axis=1, num_or_size_splits=num_unrollings, value=self.input_data)]
 
     # Copy cell to do unrolling and collect outputs.
     outputs, final_state = tf.contrib.rnn.static_rnn(
@@ -97,8 +87,8 @@ class CharRNN(object):
 
     # Create softmax parameters, weights and bias.
     with tf.variable_scope('softmax') as sm_vs:
-      softmax_w = tf.get_variable("softmax_w", [hidden_size, self.output_size])
-      softmax_b = tf.get_variable("softmax_b", [self.output_size])
+      softmax_w = tf.get_variable("softmax_w", [hidden_size, output_size])
+      softmax_b = tf.get_variable("softmax_b", [output_size])
       self.logits = tf.matmul(flat_outputs, softmax_w) + softmax_b
       self.probs = tf.nn.softmax(self.logits, name='output')
 
@@ -144,15 +134,13 @@ class CharRNN(object):
       #                                            5000, 0.1, staircase=True)
       tvars = tf.trainable_variables()
       grads, _ = tf.clip_by_global_norm(tf.gradients(self.mean_loss, tvars),
-                                        self.max_grad_norm)
+                                        max_grad_norm)
       # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
       # optimizer = tf.train.RMSPropOptimizer(learning_rate, decay_rate)
       optimizer = tf.train.AdamOptimizer(self.learning_rate)
 
       self.train_op = optimizer.apply_gradients(zip(grads, tvars),
                                                 global_step=self.global_step)
-    print("done initing at", time.time() - start_time)
-
 
 
 def create_tuple_placeholders_with_default(inputs, extra_dims, shape):

@@ -244,7 +244,7 @@ func TestRenderImage(t *testing.T) {
 	}
 	filePathPH, pcmOP := ReadWaveToPCM(s.SubScope("read_pcm"))                  // read in the wav file and convert to float32 pcm
 	mfccOP, sampleRatePH := ComputeMFCC(s, pcmOP)                               // compute MFCC
-	specgramOP := ComputeSpectrogram(s.SubScope("spectrogram"), pcmOP, 10, 400) // compute spectrogram
+	specgramOP := ComputeSpectrogram(s.SubScope("spectrogram"), pcmOP, 0, 0) // compute spectrogram
 	mfccJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), mfccOP)            // render image of mfcc
 	specgramJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), specgramOP)    // render image of spectrogram.
 	graph, err := s.Finalize()
@@ -376,7 +376,7 @@ func TestParseRawToPCM(t *testing.T) {
 func TestBytesToBytes1(t *testing.T) {
 	s := op.NewScope()
 	wavBytesPH, pcm := ParseWavBytesToPCM(s)
-	specgramOP := ComputeSpectrogram(s.SubScope("spectrogram"), pcm, 10, 400) // compute spectrogram
+	specgramOP := ComputeSpectrogram(s.SubScope("spectrogram"), pcm, 10, 40) // compute spectrogram
 	specgramJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), specgramOP)  // render image of spectrogram.
 	feeds := map[tf.Output]*tf.Tensor{}
 	renderImage, err := BytesToBytes(s, wavBytesPH, specgramJpegBytesOP, feeds)
