@@ -1,12 +1,13 @@
 package main
 
 import (
-	tf "github.com/tensorflow/tensorflow/tensorflow/go"
-  "encoding/hex"
+	"encoding/hex"
 	"errors"
+	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils"
+	"github.ibm.com/Blue-Horizon/aural2/tfutils/lstmutils"
 	"io/ioutil"
 	"strconv"
 )
@@ -25,17 +26,16 @@ func getAudioClipFromFS(id libaural2.ClipID) (audioClip *libaural2.AudioClip, er
 	return
 }
 
-
-func makeAddRIFF()(addRIFF func(*libaural2.AudioClip)([]byte, error), err error){
+func makeAddRIFF() (addRIFF func(*libaural2.AudioClip) ([]byte, error), err error) {
 	headerString := "5249464624e2040057415645666d74201000000001000100803e0000007d0000020010006461746100e20400"
-  header, err := hex.DecodeString(headerString)
-  if err != nil {
-    return
-  }
-  addRIFF = func(audioClip *libaural2.AudioClip)([]byte, error){
-    return append(header, audioClip[:]...), nil
-  }
-  return
+	header, err := hex.DecodeString(headerString)
+	if err != nil {
+		return
+	}
+	addRIFF = func(audioClip *libaural2.AudioClip) ([]byte, error) {
+		return append(header, audioClip[:]...), nil
+	}
+	return
 }
 
 func makeRenderSpectrogram() (renderSpectrogram func(*libaural2.AudioClip) ([]byte, error), err error) {
@@ -86,6 +86,41 @@ func makeRenderMFCC() (renderMFCC func(*libaural2.AudioClip) ([]byte, error), er
 		imageBytes, err = renderImage(raw[:])
 		if err != nil {
 			logger.Println(err)
+			return
+		}
+		return
+	}
+	return
+}
+
+func makeRenderProbs() (renderProbs func(*libaural2.AudioClip) ([]byte, error), err error) {
+	graphBytes, err := ioutil.ReadFile("models/cmd_rnn.pb")
+	if err != nil {
+		return
+	}
+	audioClipToMFCCtensor, err := tfutils.MakeAudioClipToMFCCtensor()
+	if err != nil {
+		return
+	}
+	seqInference, err := lstmutils.MakeSeqInference(graphBytes)
+	if err != nil {
+		return
+	}
+	probsTensorToImage, err := tfutils.MakeProbsTensorToImage()
+	if err != nil {
+		return
+	}
+	renderProbs = func(clip *libaural2.AudioClip) (imageBytes []byte, err error) {
+		mfccTensor, err := audioClipToMFCCtensor(clip)
+		if err != nil {
+			return
+		}
+		probs, err := seqInference(mfccTensor)
+		if err != nil {
+			return
+		}
+		imageBytes, err = probsTensorToImage(probs)
+		if err != nil {
 			return
 		}
 		return

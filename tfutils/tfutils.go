@@ -122,8 +122,9 @@ func ComputeMFCC(s *op.Scope, pcm tf.Output) (mfcc, sampleRatePH tf.Output) {
 		int64(libaural2.StrideWidth),              // stride size
 		op.AudioSpectrogramMagnitudeSquared(true), // square the magnitude
 	)
-	mfccs := op.Mfcc(s.SubScope("mfcc"), spectrogram, sampleRatePH)         // compute the mfcc
-	mfcc = op.Unpack(s.SubScope("channels"), mfccs, 1, op.UnpackAxis(0))[0] // remove the unnecessary dimension
+	mfccs := op.Mfcc(s.SubScope("mfcc"), spectrogram, sampleRatePH)            // compute the mfcc
+	unpack := op.Unpack(s.SubScope("channels"), mfccs, 1, op.UnpackAxis(0))[0] // remove the unnecessary dimension
+	mfcc = op.Identity(s, unpack)
 	return
 }
 
@@ -242,7 +243,6 @@ func EmbedTrainingData(inputs [][][]float32, outputs [][libaural2.StridesPerClip
 	r := rand.New(seed)
 	for i := 0; i < numSubSeqs; i++ {
 		start := r.Intn(libaural2.StridesPerClip - libaural2.SeqLen)
-
 		inputsBegin := op.Const(is.SubScope("begin"), []int32{0, int32(start), 0})
 		inputsSize := op.Const(is.SubScope("size"), []int32{int32(len(inputs)), int32(libaural2.SeqLen), int32(libaural2.InputSize)})
 		inputSubSeq := op.Slice(is.SubScope("slice"), inputsConst, inputsBegin, inputsSize)
@@ -275,5 +275,76 @@ func EmbedTrainingData(inputs [][][]float32, outputs [][libaural2.StridesPerClip
 	//logger.Println(outputIdent.Op.Name())
 	_ = idsConst
 	graph, err = s.Finalize()
+	return
+}
+
+// MakeAudioClipToMFCCtensor makes a function that takes an audioClip and returns a tensor of mfccs sutable for feeding to seqInference
+func MakeAudioClipToMFCCtensor() (renderMFCC func(*libaural2.AudioClip) (*tf.Tensor, error), err error) {
+	s := op.NewScope()
+	bytesPH, pcm := ParseRawBytesToPCM(s)
+	mfccOP, sampleRatePH := ComputeMFCC(s.SubScope("spectrogram"), pcm)
+	dim := op.Const(s, int32(0))
+	expanded := op.ExpandDims(s, mfccOP, dim)
+	sampleRateTensor, err := tf.NewTensor(int32(libaural2.SampleRate))
+	if err != nil {
+		return
+	}
+	graph, err := s.Finalize() // finalize the scope to get the graph
+	if err != nil {
+		return
+	}
+	sess, err := tf.NewSession(graph, nil) // start a new TF session
+	if err != nil {
+		return
+	}
+	renderMFCC = func(raw *libaural2.AudioClip) (mfccTensor *tf.Tensor, err error) {
+		inputTensor, err := tf.NewTensor(string(raw[:])) // create a string tensor from the input bytes
+		if err != nil {
+			return
+		}
+		feeds := map[tf.Output]*tf.Tensor{
+			sampleRatePH: sampleRateTensor,
+			bytesPH:      inputTensor,
+		}
+		results, err := sess.Run(feeds, []tf.Output{expanded}, nil)
+		if err != nil {
+			return
+		}
+		mfccTensor = results[0]
+		return
+	}
+	return
+}
+
+// MakeProbsTensorToImage makes a function that takes a tensor of probs, and returns the byte of an image.
+func MakeProbsTensorToImage() (probsToImage func(*tf.Tensor) ([]byte, error), err error) {
+	s := op.NewScope()
+	probsPH := op.Placeholder(s, tf.Float)
+	permutations := op.Const(s.SubScope("permutations"), []int32{1, 0})                       // the dims to be permuted, dim 0 is swiched with dim 1
+	transposed := op.Transpose(s.SubScope("rotate"), probsPH, permutations)                   // switch vertical and horizontal axis
+	rgb := op.Pack(s.SubScope("pack"), []tf.Output{transposed}, op.PackAxis(2))               // stack the values and the ones up into hsv. Hue is the normalized values, saturation and value are 1
+	rescaled := op.Mul(s.SubScope("rescale"), rgb, op.Const(s.SubScope("256"), float32(256))) // convert the floats from 0-1, to 0-255
+	int8RGB := op.Cast(s.SubScope("cast"), rescaled, tf.Uint8)                                // cast them to uint8
+	jpegBytesOP := op.EncodeJpeg(s.SubScope("jpeg"), int8RGB)                                 // encode to jpeg
+
+	graph, err := s.Finalize() // finalize the scope to get the graph
+	if err != nil {
+		return
+	}
+	sess, err := tf.NewSession(graph, nil) // start a new TF session
+	if err != nil {
+		return
+	}
+	probsToImage = func(probs *tf.Tensor) (imageBytes []byte, err error) {
+		feeds := map[tf.Output]*tf.Tensor{
+			probsPH: probs,
+		}
+		results, err := sess.Run(feeds, []tf.Output{jpegBytesOP}, nil)
+		if err != nil {
+			return
+		}
+		imageBytes = []byte(results[0].Value().(string))
+		return
+	}
 	return
 }

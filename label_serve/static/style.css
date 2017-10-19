@@ -37,23 +37,26 @@ body {
 }
 
 #spectrogram{
-  margin-bottom: 10px;
-  height: 70%;
+  height: 50%;
 }
 #mfcc{
   height: 10%;
 }
 
 #labels-container {
-  height: 10%;
+  height: 5%;
 }
 
 #labelset{
-  height: 10%;
+  height: 5%;
+}
+
+#probs {
+  height: 30%;
 }
 
 .label{
   width: 5px;
-  height: 10%;
+  height: 5%;
   position: absolute;
 }
