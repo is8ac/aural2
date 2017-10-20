@@ -27,7 +27,7 @@ def main():
             "learning_rate": 0.002,
             "max_grad_norm": 5.0,
             "num_layers": 2,
-            "num_unrollings": 50,
+            "num_unrollings": 100,
             "full_seq_len": 312,
             "output_size": 40,
             "num_batches": 2000,

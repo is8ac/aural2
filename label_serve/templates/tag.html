@@ -12,12 +12,13 @@
 
 <body>
   <div id="curser"></div>
+  <img class="pixelated timeviz" id="spectrogram" src="../images/spectrogram/{{.Base32ID}}.jpeg">
+  <img class="pixelated timeviz" id="mfcc" src="../images/mfcc/{{.Base32ID}}.jpeg">
   <div class="timeviz" id="labels-container">
     <div id="labels"></div>
   </div>
-  <img class="pixelated timeviz" id="spectrogram" src="../images/spectrogram/{{.Base32ID}}.jpeg">
-  <img class="pixelated timeviz" id="mfcc" src="../images/mfcc/{{.Base32ID}}.jpeg">
   <img class="pixelated timeviz" id="labelset" src="../images/labelset/{{.Base32ID}}.png">
+  <img class="pixelated timeviz" id="argmax" src="../images/argmax/{{.Base32ID}}.png">
   <img class="pixelated timeviz" id="probs" src="../images/probs/{{.Base32ID}}.jpeg">
 
   <audio id="audio" preload="auto">

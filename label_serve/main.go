@@ -341,6 +341,10 @@ func main() {
 	if err != nil {
 		logger.Fatalln(err)
 	}
+	renderArgmaxedCmds, err := makeRenderArgmaxedCmds()
+	if err != nil {
+		logger.Fatalln(err)
+	}
 	serializeLabelSet := func(labelSet libaural2.LabelSet) (serialized []byte, err error) {
 		serialized, err = labelSet.Serialize()
 		return
@@ -350,6 +354,7 @@ func main() {
 	r.HandleFunc("/images/spectrogram/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderSpectrogram))
 	r.HandleFunc("/images/mfcc/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderMFCC))
 	r.HandleFunc("/images/probs/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderProbs))
+	r.HandleFunc("/images/argmax/{sampleID}.png", makeServeAudioDerivedBlob(renderArgmaxedCmds))
 	r.HandleFunc("/images/labelset/{sampleID}.png", makeServeLabelsSetDerivedBlob(db.GetLabelSet, renderColorLabelSetImage))
 	r.HandleFunc("/audio/{sampleID}.wav", makeServeAudioDerivedBlob(computeWav))
 	r.HandleFunc("/tagui/{sampleID}", makeServeTagUI())

@@ -29,7 +29,7 @@ const SamplePerClip int = SampleRate * Duration
 const StridesPerClip int = SamplePerClip / StrideWidth
 
 // SeqLen is the length of sequences to be feed to the LSTM for training.
-const SeqLen int = 50
+const SeqLen int = 100
 
 // AudioClipLen is the number of bytes in one audio clip
 const AudioClipLen int = SamplePerClip * 2
@@ -105,11 +105,16 @@ func (cmd Cmd) ToOutput() (output Output) {
 	return
 }
 
+// Hue returns the hue as a float64
+func (cmd Cmd) Hue() (hue float64) {
+	hash := sha256.Sum256([]byte{uint8(cmd)})
+	hue = float64(hash[0]) * float64(hash[1]) / (255 * 255) * 360
+	return
+}
+
 // RGBA implements the color.Color interface
 func (cmd Cmd) RGBA() (r, g, b, a uint32) {
-	hash := sha256.Sum256([]byte{uint8(cmd)})
-	hue := float64(hash[0]) * float64(hash[1]) / (255 * 255) * 360
-	classColor := colorful.Hsv(hue, 1, 1)
+	classColor := colorful.Hsv(cmd.Hue(), 1, 1)
 	return classColor.RGBA()
 }
 

@@ -7,8 +7,12 @@ import (
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils"
+	"image"
+	"bytes"
+	"image/png"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils/lstmutils"
 	"io/ioutil"
+	"github.com/lucasb-eyer/go-colorful"
 	"strconv"
 )
 
@@ -124,6 +128,57 @@ func makeRenderProbs() (renderProbs func(*libaural2.AudioClip) ([]byte, error), 
 			return
 		}
 		return
+	}
+	return
+}
+
+
+func makeRenderArgmaxedCmds() (renderProbs func(*libaural2.AudioClip) ([]byte, error), err error) {
+	graphBytes, err := ioutil.ReadFile("models/cmd_rnn.pb")
+	if err != nil {
+		return
+	}
+	audioClipToMFCCtensor, err := tfutils.MakeAudioClipToMFCCtensor()
+	if err != nil {
+		return
+	}
+	seqInference, err := lstmutils.MakeSeqInference(graphBytes)
+	if err != nil {
+		return
+	}
+	renderProbs = func(clip *libaural2.AudioClip) (imageBytes []byte, err error) {
+		mfccTensor, err := audioClipToMFCCtensor(clip)
+		if err != nil {
+			return
+		}
+		probsTensor, err := seqInference(mfccTensor)
+		if err != nil {
+			return
+		}
+		probsList := probsTensor.Value().([][]float32)
+		image := image.NewRGBA(image.Rect(0, 0, libaural2.StridesPerClip, 1))
+		for x, probs := range probsList {
+			cmd, prob := argmax(probs)
+			color := colorful.Hsv(cmd.Hue(), 1, float64(prob))
+			image.Set(x, 0, color)
+		}
+		buff := bytes.Buffer{}
+		if err = png.Encode(&buff, image); err != nil {
+			return
+		}
+		imageBytes = buff.Bytes()
+		return
+	}
+	return
+}
+
+// argmax returns the index and prob of the largest elements of the list.
+func argmax(probs []float32) (cmd libaural2.Cmd, prob float32) {
+	for i, val := range probs {
+		if val > prob {
+			prob = val
+			cmd = libaural2.Cmd(int32(i))
+		}
 	}
 	return
 }

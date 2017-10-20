@@ -52,9 +52,12 @@ body {
 }
 
 #probs {
-  height: 30%;
+  height: 25%;
 }
 
+#argmax {
+  height: 5%;
+}
 .label{
   width: 5px;
   height: 5%;
