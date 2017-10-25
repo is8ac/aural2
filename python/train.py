@@ -18,19 +18,20 @@ import time
 
 def main():
     params = {
-            "batch_size": 10,
+            "batch_size": 5,
             "dropout": 0.0,
             "embedding_size": 0,
-            "hidden_size": 512,
+            "hidden_size": 256,
             "input_dropout": 0.0,
             "input_size": 13,
-            "learning_rate": 0.002,
+            "learning_rate": 0.0005,
             "max_grad_norm": 5.0,
             "num_layers": 2,
             "num_unrollings": 100,
             "full_seq_len": 312,
-            "output_size": 40,
-            "num_batches": 2000,
+            "output_size": 20,
+            "num_batches": 20000,
+            "vocab_name": "intent",
             }
 
     # Create graphs
@@ -75,7 +76,7 @@ def main():
     with tf.Session(graph=graph) as session:
         with tf.name_scope('training_data'):
             graph_def = tf.GraphDef()
-            graph_path = 'trainingdata.pb'
+            graph_path = 'trainingdata/' + params["vocab_name"] + '.pb'
             with open(graph_path, "rb") as f:
                 proto_b = f.read()
                 graph_def.ParseFromString(proto_b)
@@ -128,7 +129,7 @@ def main():
             zeros.op.name
             ], # preserve all these OPs
         )
-        tf.train.write_graph(frozenGraph, 'models', 'cmd_rnn.pb', as_text=False)
+        tf.train.write_graph(frozenGraph, 'models', params["vocab_name"] + '_rnn.pb', as_text=False)
 
 
 

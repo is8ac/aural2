@@ -9,9 +9,20 @@ import (
 	"image/color"
 
 	la "github.ibm.com/Blue-Horizon/aural2/libaural2"
+	"github.ibm.com/Blue-Horizon/aural2/vsh/emotion"
+	"github.ibm.com/Blue-Horizon/aural2/vsh/intent"
+	"github.ibm.com/Blue-Horizon/aural2/vsh/speaker"
+	"github.ibm.com/Blue-Horizon/aural2/vsh/word"
 	"honnef.co/go/js/dom"
 	"honnef.co/go/js/xhr"
 )
+
+var vocabs = map[string]*la.Vocabulary{
+	"word":    &word.Vocabulary,
+	"intent":  &intent.Vocabulary,
+	"speaker": &speaker.Vocabulary,
+	"emotion": &emotion.Vocabulary,
+}
 
 func colorToCSSstring(colorObj color.Color) (colorString string) {
 	r, g, b, _ := colorObj.RGBA()
@@ -36,8 +47,8 @@ func createLabelMarker(label la.Label) (setEnd func(float64)) {
 	left := label.Start / float64(la.Duration)
 	labelDiv.Style().Set("left", strconv.FormatFloat(left*100, 'f', 8, 64)+"%")
 	labelDiv.SetClass("label")
-	labelDiv.SetInnerHTML("<p class='cmd_label'>" + label.Cmd.String() + "</p>")
-	labelDiv.Style().SetProperty("background-color", colorToCSSstring(label.Cmd), "")
+	labelDiv.SetInnerHTML("<p class='state_label'>" + vocab.Names[label.State] + "</p>")
+	labelDiv.Style().SetProperty("background-color", colorToCSSstring(label.State), "")
 	labelsContainer.AppendChild(labelDiv)
 	labelDiv.AddEventListener("click", false, func(arg3 dom.Event) {
 		labelsContainer.RemoveChild(labelDiv)
@@ -58,11 +69,12 @@ func createLabelMarker(label la.Label) (setEnd func(float64)) {
 }
 
 func postLabelsSet(labels la.LabelSet) (err error) {
+	print("posting")
 	serialised, err := labels.Serialize()
 	if err != nil {
 		return
 	}
-	_, err = xhr.Send("POST", "../labelsset/"+clipID.FSsafeString(), serialised)
+	_, err = xhr.Send("POST", "/labelsset/"+string(vocab.Name)+"/"+clipID.FSsafeString(), serialised)
 	if err != nil {
 		print(err)
 		return
@@ -71,7 +83,7 @@ func postLabelsSet(labels la.LabelSet) (err error) {
 }
 
 func getLabelsSet() {
-	resp, err := xhr.Send("GET", "../labelsset/"+clipID.FSsafeString(), nil)
+	resp, err := xhr.Send("GET", "/labelsset/"+string(vocab.Name)+"/"+clipID.FSsafeString(), nil)
 	if err != nil {
 		print(err)
 		return
@@ -88,46 +100,8 @@ func getLabelsSet() {
 }
 
 var clipID la.ClipID
+var vocab *la.Vocabulary
 var labelsSet la.LabelSet
-
-var keyToCmd = map[string]la.Cmd{
-	"?": la.Unknown,
-	"y": la.Yes,
-	"n": la.No,
-	"t": la.True,
-	"f": la.False,
-	"C": la.CtrlC,
-	"S": la.Sudo,
-	"M": la.Mpc,
-	">": la.Play,
-	"<": la.Pause,
-	"|": la.Stop,
-	"O": la.OK,
-	"s": la.Set,
-	"i": la.Is,
-	"h": la.What,
-	"=": la.Same,
-	";": la.Different,
-	"T": la.When,
-	"w": la.Who,
-	"L": la.Where,
-	"G": la.OKgoogle,
-	"A": la.Alexa,
-	"m": la.Music,
-	"g": la.Genre,
-	"c": la.Classical,
-	"p": la.Plainsong,
-	"v": la.Vocaloid,
-	"r": la.Reggae,
-	"!": la.Rock,
-	"N": la.RockAndRoll,
-	"$": la.Rap,
-	"d": la.HipHop,
-	"b": la.Blues,
-	"j": la.Shakuhachi,
-	"x": la.Grep,
-	"Y": la.Yotsugi,
-}
 
 func start() {
 	var err error
@@ -142,6 +116,12 @@ func start() {
 
 	copy(clipID[:], clipIDbytes)
 	print(clipID.String())
+
+	vocabName := dom.GetWindow().Document().GetElementByID("data").(*dom.HTMLDivElement).Dataset()["vocabname"]
+	vocab = vocabs[vocabName]
+	if vocab == nil {
+		print("can't find vocab name", vocabName)
+	}
 	go getLabelsSet()
 	w := dom.GetWindow()
 	d := w.Document()
@@ -184,17 +164,16 @@ func start() {
 	})
 	w.AddEventListener("keydown", false, func(event dom.Event) {
 		ke := event.(*dom.KeyboardEvent)
-		for key, cmd := range keyToCmd {
-			// if it is a cmd,
-			if key == ke.Key && key != currentlyDepressedKey {
-				currentlyDepressedKey = key
+		state, prs := vocab.KeyMapping[ke.Key]
+		if prs {
+			if ke.Key != currentlyDepressedKey {
+				currentlyDepressedKey = ke.Key
 				label := la.Label{
-					Cmd:   cmd,
+					State: state,
 					Start: audio.Get("currentTime").Float(),
 				}
 				curLabel = label
 				setEnd = createLabelMarker(curLabel)
-				continue
 			}
 		}
 		//if ke.Key == "s" {
@@ -238,7 +217,7 @@ func start() {
 }
 
 func main() {
-	fmt.Println("Audio vis GUI version 0.1.1")
+	fmt.Println("Audio vis GUI version 0.1.2")
 	w := dom.GetWindow()
 	w.AddEventListener("DOMContentLoaded", true, func(event dom.Event) {
 		go start()

@@ -6,26 +6,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Aural2 tagUI</title>
   <meta name="theme-color" content="black">
-  <link rel="stylesheet" type="text/css" href="../static/style.css">
-  <script type="text/javascript" src="../static/main.js" charset="utf-8"></script>
+  <link rel="stylesheet" type="text/css" href="/static/style.css">
+  <script type="text/javascript" src="/static/main.js" charset="utf-8"></script>
 </head>
 
 <body>
   <div id="curser"></div>
-  <img class="pixelated timeviz" id="spectrogram" src="../images/spectrogram/{{.Base32ID}}.jpeg">
-  <img class="pixelated timeviz" id="mfcc" src="../images/mfcc/{{.Base32ID}}.jpeg">
+  <img class="pixelated timeviz" id="spectrogram" src="/images/spectrogram/{{.Base32ID}}.jpeg">
+  <img class="pixelated timeviz" id="mfcc" src="/images/mfcc/{{.Base32ID}}.jpeg">
   <div class="timeviz" id="labels-container">
     <div id="labels"></div>
   </div>
-  <img class="pixelated timeviz" id="labelset" src="../images/labelset/{{.Base32ID}}.png">
-  <img class="pixelated timeviz" id="argmax" src="../images/argmax/{{.Base32ID}}.png">
-  <img class="pixelated timeviz" id="probs" src="../images/probs/{{.Base32ID}}.jpeg">
+  <img class="pixelated timeviz" id="labelset" src="/images/labelset/{{.VocabName}}/{{.Base32ID}}.png">
+  <img class="pixelated timeviz" id="argmax" src="/images/argmax/{{.VocabName}}/{{.Base32ID}}.png">
+  <img class="pixelated timeviz" id="probs" src="/images/probs/{{.VocabName}}/{{.Base32ID}}.jpeg">
 
   <audio id="audio" preload="auto">
-    <source src="../audio/{{.Base32ID}}.wav" type="audio/wav">
+    <source src="/audio/{{.Base32ID}}.wav" type="audio/wav">
       Your browser does not support this audio format.
   </audio>
-  <div id="data" data-b32sampleid="{{.Base32ID}}"></div>
+  <div id="data" data-b32sampleid="{{.Base32ID}}" data-vocabname="{{.VocabName}}"></div>
 </body>
 
 </html>

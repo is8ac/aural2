@@ -9,8 +9,9 @@
 </head>
 
 <body>
+  {{$vocabName := .VocabName}}
   {{ range $id := index $.IDs}}
-      <h2><a href="tagui/{{$id.FSsafeString}}">{{$id.String}}</a></h2>
+      <h2><a href="/tagui/{{$vocabName}}/{{$id.FSsafeString}}">{{$id.String}}</a></h2>
   {{ end }}
 
 </body>

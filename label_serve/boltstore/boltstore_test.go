@@ -2,13 +2,14 @@ package boltstore
 
 import (
 	"crypto/sha256"
-	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"os"
 	"testing"
+
+	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 )
 
 func TestInit(t *testing.T) {
-	db, err := Init("test.db")
+	db, err := Init("test.db", []libaural2.VocabName{"word", "intent", "foo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,7 +20,7 @@ func TestInit(t *testing.T) {
 }
 
 func TestPutLabelSet(t *testing.T) {
-	db, err := Init("test.db")
+	db, err := Init("test.db", []libaural2.VocabName{"word", "intent", "foo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,17 +29,17 @@ func TestPutLabelSet(t *testing.T) {
 		ID: hash,
 		Labels: []libaural2.Label{
 			libaural2.Label{
-				Cmd:   libaural2.Who,
+				State: libaural2.Foo,
 				Start: 1.23,
 				End:   2.8,
 			},
 			libaural2.Label{
-				Cmd:   libaural2.What,
+				State: libaural2.Bar,
 				Start: 3.23,
 				End:   4.8,
 			},
 			libaural2.Label{
-				Cmd:   libaural2.When,
+				State: libaural2.Baz,
 				Start: 5.23,
 				End:   6.8,
 			},
@@ -55,7 +56,7 @@ func TestPutLabelSet(t *testing.T) {
 }
 
 func TestGetLabelSet(t *testing.T) {
-	db, err := Init("test.db")
+	db, err := Init("test.db", []libaural2.VocabName{"word", "intent", "foo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,17 +65,17 @@ func TestGetLabelSet(t *testing.T) {
 		ID: hash,
 		Labels: []libaural2.Label{
 			libaural2.Label{
-				Cmd:   libaural2.Who,
+				State: libaural2.Foo,
 				Start: 1.23,
 				End:   2.8,
 			},
 			libaural2.Label{
-				Cmd:   libaural2.What,
+				State: libaural2.Bar,
 				Start: 3.23,
 				End:   4.8,
 			},
 			libaural2.Label{
-				Cmd:   libaural2.When,
+				State: libaural2.Baz,
 				Start: 5.23,
 				End:   6.8,
 			},
@@ -84,7 +85,7 @@ func TestGetLabelSet(t *testing.T) {
 	if err := db.PutLabelSet(labelSet); err != nil {
 		t.Fatal(err)
 	}
-	outLabelSet, err := db.GetLabelSet(hash)
+	outLabelSet, err := db.GetLabelSet(hash, libaural2.VocabName("word"))
 	if err != nil {
 		t.Fatal(err)
 	}
