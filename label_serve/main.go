@@ -22,8 +22,19 @@ import (
 	"github.ibm.com/Blue-Horizon/aural2/label_serve/boltstore"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils"
+	"github.ibm.com/Blue-Horizon/aural2/vsh/emotion"
+	"github.ibm.com/Blue-Horizon/aural2/vsh/intent"
+	"github.ibm.com/Blue-Horizon/aural2/vsh/speaker"
+	"github.ibm.com/Blue-Horizon/aural2/vsh/word"
 	"repo.hovitos.engineering/MTN/wave/cloud/application/aural/urbitname"
 )
+
+var vocabs = map[libaural2.VocabName]*libaural2.Vocabulary{
+	"word":    &word.Vocabulary,
+	"intent":  &intent.Vocabulary,
+	"speaker": &speaker.Vocabulary,
+	"emotion": &emotion.Vocabulary,
+}
 
 func parseURLvar(urlVar string) (clipID libaural2.ClipID, err error) {
 	fileHash, err := base32.StdEncoding.DecodeString(urlVar)
@@ -71,8 +82,14 @@ func makeServeAudioDerivedBlob(clipToBlob func(*libaural2.AudioClip) ([]byte, er
 }
 
 // makeServeLabelsSetDerivedBlob makes a handler func to serve a []byte derived from a labelSet.
-func makeServeLabelsSetDerivedBlob(getLabelsSet func(libaural2.ClipID) (libaural2.LabelSet, error), setToBlob func(libaural2.LabelSet) ([]byte, error)) func(http.ResponseWriter, *http.Request) {
+func makeServeLabelsSetDerivedBlob(getLabelsSet func(libaural2.ClipID, libaural2.VocabName) (libaural2.LabelSet, error), setToBlob func(libaural2.LabelSet) ([]byte, error)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		vocabName := libaural2.VocabName(mux.Vars(r)["vocab"])
+		vocab, prs := vocabs[vocabName]
+		if !prs {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		audioIDstring := mux.Vars(r)["sampleID"]
 		clipID, err := parseURLvar(audioIDstring)
 		if err != nil {
@@ -80,7 +97,7 @@ func makeServeLabelsSetDerivedBlob(getLabelsSet func(libaural2.ClipID) (libaural
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
-		labelSet, err := getLabelsSet(clipID)
+		labelSet, err := getLabelsSet(clipID, vocab.Name)
 		if err != nil {
 			logger.Println(err)
 			http.Error(w, "", http.StatusInternalServerError)
@@ -99,7 +116,7 @@ func makeServeLabelsSetDerivedBlob(getLabelsSet func(libaural2.ClipID) (libaural
 }
 
 // makeServeTrainingDataGraphdef makes a handler func to serve a graphdef that, when pulled on, will give training data.
-func makeServeTrainingDataGraphdef(getAllLabelSets func() (map[libaural2.ClipID]libaural2.LabelSet, error)) func(http.ResponseWriter, *http.Request) {
+func makeServeTrainingDataGraphdef(getAllLabelSets func(libaural2.VocabName) (map[libaural2.ClipID]libaural2.LabelSet, error)) func(http.ResponseWriter, *http.Request) {
 	s := op.NewScope()
 	bytesPH, pcm := tfutils.ParseRawBytesToPCM(s)
 	mfccOP, sampleRatePH := tfutils.ComputeMFCC(s.SubScope("spectrogram"), pcm)
@@ -117,12 +134,14 @@ func makeServeTrainingDataGraphdef(getAllLabelSets func() (map[libaural2.ClipID]
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		labelSets, err := getAllLabelSets()
+		vocabName := libaural2.VocabName(mux.Vars(r)["vocab"])
+		labelSets, err := getAllLabelSets(vocabName)
 		if err != nil {
 			logger.Println(err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
+		logger.Println(len(labelSets))
 		var inputs [][][]float32
 		var outputs [][libaural2.StridesPerClip]int32
 		var ids []libaural2.ClipID
@@ -153,11 +172,12 @@ func makeServeTrainingDataGraphdef(getAllLabelSets func() (map[libaural2.ClipID]
 				return
 			}
 			input := result[0].Value().([][]float32)
-			//input = libaural2.GenFakeInput(labelSet.ToCmdIDArray())
+			//input = libaural2.GenFakeInput(labelSet.ToStateIDArray())
 			inputs = append(inputs, input)
-			outputs = append(outputs, labelSet.ToCmdIDArray())
+			outputs = append(outputs, labelSet.ToStateIDArray())
 			ids = append(ids, id)
 		}
+		logger.Println(len(inputs), len(outputs))
 		graph, err := tfutils.EmbedTrainingData(inputs, outputs, ids, 8, libaural2.BatchSize) // take 8 sub seqs, and batch size of 10
 		if err != nil {
 			logger.Println(err)
@@ -173,7 +193,9 @@ func makeServeTrainingDataGraphdef(getAllLabelSets func() (map[libaural2.ClipID]
 func makeWriteLabelsSet(put func(libaural2.LabelSet) error) func(http.ResponseWriter, *http.Request) {
 	nilID := libaural2.ClipID{}
 	return func(w http.ResponseWriter, r *http.Request) {
+		logger.Println("putting labelset")
 		audioIDstring := mux.Vars(r)["sampleID"]
+		vocabName := libaural2.VocabName(mux.Vars(r)["vocab"])
 		sampleID, err := parseURLvar(audioIDstring)
 		if err != nil {
 			logger.Println(err)
@@ -201,6 +223,11 @@ func makeWriteLabelsSet(put func(libaural2.LabelSet) error) func(http.ResponseWr
 			http.Error(w, "", http.StatusBadRequest)
 			return
 		}
+		if vocabName != labelsSet.VocabName {
+			logger.Println(vocabName, "!=", labelsSet.VocabName)
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
 		if sampleID != labelsSet.ID {
 			logger.Println(sampleID, "!=", labelsSet.ID)
 			http.Error(w, "", http.StatusBadRequest)
@@ -221,12 +248,15 @@ func makeWriteLabelsSet(put func(libaural2.LabelSet) error) func(http.ResponseWr
 
 func makeServeIndex(list func() []libaural2.ClipID) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		vocabName := libaural2.VocabName(mux.Vars(r)["vocab"])
 		var indexTemplate = template.Must(template.ParseFiles("templates/index.html"))
 		ids := list()
 		params := struct {
-			IDs []libaural2.ClipID
+			IDs       []libaural2.ClipID
+			VocabName libaural2.VocabName
 		}{
-			IDs: ids,
+			IDs:       ids,
+			VocabName: vocabName,
 		}
 		err := indexTemplate.Execute(w, params)
 		if err != nil {
@@ -240,9 +270,11 @@ func makeServeIndex(list func() []libaural2.ClipID) func(http.ResponseWriter, *h
 func makeServeTagUI() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		audioIDstring := mux.Vars(r)["sampleID"]
+		vocabName := mux.Vars(r)["vocab"]
 		hash, err := parseURLvar(audioIDstring)
 		if err != nil {
 			logger.Println(err)
+			logger.Println(audioIDstring)
 			http.Error(w, "", http.StatusBadRequest)
 			return
 		}
@@ -250,9 +282,11 @@ func makeServeTagUI() func(http.ResponseWriter, *http.Request) {
 		params := struct {
 			Base32ID      string
 			UrbitSampleID string
+			VocabName     string
 		}{
 			UrbitSampleID: urbitname.Encode(hash[:4]),
 			Base32ID:      base32.StdEncoding.EncodeToString(hash[:]),
+			VocabName:     vocabName,
 		}
 		err = uiTemplate.Execute(w, params)
 		if err != nil {
@@ -302,8 +336,9 @@ func makeSampleHandler(putClipID func(libaural2.ClipID) error) func(http.Respons
 
 func renderColorLabelSetImage(labelSet libaural2.LabelSet) (pngBytes []byte, err error) {
 	image := image.NewRGBA(image.Rect(0, 0, libaural2.StridesPerClip, 1))
-	for x, cmd := range labelSet.ToCmdArray() {
-		image.Set(x, 0, cmd)
+	for x, state := range labelSet.ToStateArray() {
+		state.Hue()
+		image.Set(x, 0, state)
 	}
 	buff := bytes.Buffer{}
 	if err = png.Encode(&buff, image); err != nil {
@@ -315,11 +350,11 @@ func renderColorLabelSetImage(labelSet libaural2.LabelSet) (pngBytes []byte, err
 
 var logger = log.New(os.Stdout, "ts_vis: ", log.Lshortfile|log.LUTC|log.Ltime|log.Ldate)
 
-const version = "0.3.1"
+const version = "0.4.0"
 
 func main() {
 	logger.Println("Audio viz server version " + version)
-	db, err := boltstore.Init("trainingdata.db")
+	db, err := boltstore.Init("label_store.db", []libaural2.VocabName{"word", "intent", "speaker", "emotion"})
 	if err != nil {
 		logger.Fatalln(err)
 	}
@@ -341,7 +376,7 @@ func main() {
 	if err != nil {
 		logger.Fatalln(err)
 	}
-	renderArgmaxedCmds, err := makeRenderArgmaxedCmds()
+	renderArgmaxedStates, err := makeRenderArgmaxedStates()
 	if err != nil {
 		logger.Fatalln(err)
 	}
@@ -353,15 +388,15 @@ func main() {
 	// with makeServeAudioDerivedBlob(), we convert the blob conversion func into a request handler.
 	r.HandleFunc("/images/spectrogram/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderSpectrogram))
 	r.HandleFunc("/images/mfcc/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderMFCC))
-	r.HandleFunc("/images/probs/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderProbs))
-	r.HandleFunc("/images/argmax/{sampleID}.png", makeServeAudioDerivedBlob(renderArgmaxedCmds))
-	r.HandleFunc("/images/labelset/{sampleID}.png", makeServeLabelsSetDerivedBlob(db.GetLabelSet, renderColorLabelSetImage))
+	r.HandleFunc("/images/probs/{vocab}/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderProbs))
+	r.HandleFunc("/images/argmax/{vocab}/{sampleID}.png", makeServeAudioDerivedBlob(renderArgmaxedStates))
+	r.HandleFunc("/images/labelset/{vocab}/{sampleID}.png", makeServeLabelsSetDerivedBlob(db.GetLabelSet, renderColorLabelSetImage))
 	r.HandleFunc("/audio/{sampleID}.wav", makeServeAudioDerivedBlob(computeWav))
-	r.HandleFunc("/tagui/{sampleID}", makeServeTagUI())
-	r.HandleFunc("/index", makeServeIndex(db.ListAudioClips))
-	r.HandleFunc("/trainingdata.pb", makeServeTrainingDataGraphdef(db.GetAllLabelSets))
-	r.HandleFunc("/labelsset/{sampleID}", makeWriteLabelsSet(db.PutLabelSet)).Methods("POST")
-	r.HandleFunc("/labelsset/{sampleID}", makeServeLabelsSetDerivedBlob(db.GetLabelSet, serializeLabelSet)).Methods("GET")
+	r.HandleFunc("/tagui/{vocab}/{sampleID}", makeServeTagUI())
+	r.HandleFunc("/{vocab}/index", makeServeIndex(db.ListAudioClips))
+	r.HandleFunc("/trainingdata/{vocab}.pb", makeServeTrainingDataGraphdef(db.GetAllLabelSets))
+	r.HandleFunc("/labelsset/{vocab}/{sampleID}", makeWriteLabelsSet(db.PutLabelSet)).Methods("POST")
+	r.HandleFunc("/labelsset/{vocab}/{sampleID}", makeServeLabelsSetDerivedBlob(db.GetLabelSet, serializeLabelSet)).Methods("GET")
 	r.HandleFunc("/sample/upload", makeSampleHandler(db.PutClipID))
 	fs := http.FileServer(http.Dir("static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))

@@ -8,8 +8,10 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"image/color"
 
 	"github.com/lucasb-eyer/go-colorful"
+
 	"github.ibm.com/ifleonar/mu/urbitname"
 )
 
@@ -37,14 +39,11 @@ const AudioClipLen int = SamplePerClip * 2
 // InputSize is the length of the input vector, currently one MFCC
 const InputSize int = 13
 
-// OutputSize is the number of commands. Increase when adding new Cmds!
-const OutputSize int = 40
-
 // BatchSize is the size of the one batch
-const BatchSize int = 10
+const BatchSize int = 5
 
-// CmdList is a list of Cmds
-type CmdList [StridesPerClip]Cmd
+// StateList is a list of States
+type StateList [StridesPerClip]State
 
 // Input is the one input to the LSTM
 type Input [InputSize]float32
@@ -52,8 +51,8 @@ type Input [InputSize]float32
 // InputSet is the set of inputs for one clip.
 type InputSet [StridesPerClip]Input
 
-// Output is one output, the softmax array of Cmds.
-type Output [OutputSize]float32
+// Output is one output, the softmax array of States.
+type Output []float32
 
 // OutputSet is the set of outputs for one clip.
 type OutputSet [StridesPerClip]Output
@@ -83,7 +82,7 @@ func (rawBytes *AudioClip) ID() ClipID {
 // ClipID is the hash of a clip of raw audio
 type ClipID [32]byte
 
-// FSsafeString returns an encoding of the ClipID safe to filesystems and URLs.
+// FSsafeString returns an encoding of the ClipID safe for filesystems and URLs.
 func (hash ClipID) FSsafeString() string {
 	return base32.StdEncoding.EncodeToString(hash[:])
 }
@@ -92,52 +91,73 @@ func (hash ClipID) String() string {
 	return urbitname.Encode(hash[0:4])
 }
 
-// Cmd is one Cmd
-type Cmd int
+// VocabName is the name of a vocabulary
+type VocabName string
 
-func (cmd Cmd) String() string {
-	return CmdToString[cmd]
+// State is one exclusive thing the NN can output
+type State int
+
+// Just for testing
+const (
+	Nil State = iota
+	Unknown
+	Foo
+	Bar
+	Baz
+	Yes
+	No
+)
+
+// Vocabulary is one exclusive list of words
+type Vocabulary struct {
+	Name       VocabName
+	Size       int
+	Names      map[State]string
+	Hue        map[State]float64
+	KeyMapping map[string]State
 }
 
-// ToOutput convert a Cmd to the onehot encoded output
-func (cmd Cmd) ToOutput() (output Output) {
-	output[cmd] = 1
+// Color turns a cmd into something that implements the color.Color interface
+func (voc Vocabulary) Color(state State) (c color.Color) {
+	c = colorful.Hsv(voc.Hue[state], 1, 1)
 	return
 }
 
+var testVocab Vocabulary
+
 // Hue returns the hue as a float64
-func (cmd Cmd) Hue() (hue float64) {
-	hash := sha256.Sum256([]byte{uint8(cmd)})
+func (state State) Hue() (hue float64) {
+	hash := sha256.Sum256([]byte{uint8(state)})
 	hue = float64(hash[0]) * float64(hash[1]) / (255 * 255) * 360
 	return
 }
 
-// RGBA implements the color.Color interface
-func (cmd Cmd) RGBA() (r, g, b, a uint32) {
-	classColor := colorful.Hsv(cmd.Hue(), 1, 1)
-	return classColor.RGBA()
+// RGBA implements color.Color
+func (state State) RGBA() (uint32, uint32, uint32, uint32) {
+	return colorful.Hsv(state.Hue(), 1, 1).RGBA()
 }
 
 // Label is one period of time.
 type Label struct {
-	Cmd   Cmd
+	State State
 	Start float64 // the duration since the start of the clip.
 	End   float64
 }
 
 // LabelSet is the set of labels for one Clip
 type LabelSet struct {
-	ID     ClipID
-	Labels []Label
+	VocabName VocabName
+	ID        ClipID
+	Labels    []Label
 }
 
-// ToCmdIDArray converts the labelSet to a slice of Cmds IDs
-func (labels *LabelSet) ToCmdIDArray() (cmdArray [StridesPerClip]int32) {
-	for i := range cmdArray {
+// ToStateIDArray converts the labelSet to a slice of State IDs
+func (labels *LabelSet) ToStateIDArray() (stateArray [StridesPerClip]int32) {
+	for i := range stateArray {
 		loc := float64(i) / float64(StridesPerClip) * float64(Duration)
 		for _, label := range labels.Labels {
 			if loc > label.Start && loc < label.End {
-				cmdArray[i] = int32(label.Cmd)
+				stateArray[i] = int32(label.State)
 				continue
 			}
 		}
@@ -145,13 +165,13 @@ func (labels *LabelSet) ToCmdIDArray() (cmdArray [StridesPerClip]int32) {
 	return
 }
 
-// ToCmdArray converts the labelSet to a slice of Cmds
-func (labels *LabelSet) ToCmdArray() (cmdArray [StridesPerClip]Cmd) {
-	for i := range cmdArray {
+// ToStateArray converts the labelSet to a slice of States
+func (labels *LabelSet) ToStateArray() (stateArray [StridesPerClip]State) {
+	for i := range stateArray {
 		loc := float64(i) / float64(StridesPerClip) * float64(Duration)
 		for _, label := range labels.Labels {
 			if loc > label.Start && loc < label.End {
-				cmdArray[i] = label.Cmd
+				stateArray[i] = label.State
 				continue
 			}
 		}
@@ -200,138 +220,56 @@ func DeserializeLabelSet(serialized []byte) (labelSet LabelSet, err error) {
 	return
 }
 
-// Standard Cmds
-const (
-	Nil Cmd = iota
-	Unknown
-	Yes
-	No
-	True
-	False
-	CtrlC
-	Sudo
-	Mpc
-	Play
-	Pause
-	Stop
-	OK
-	Set
-	Is
-	What
-	Same
-	Different
-	When
-	Who
-	Where
-	OKgoogle
-	Alexa
-	Music
-	Genre
-	Classical
-	Plainsong
-	Vocaloid
-	Reggae
-	Rock
-	RockAndRoll
-	Rap
-	HipHop
-	Blues
-	Shakuhachi
-	Yotsugi
-	Grep
-)
-
-// CmdToString converts a cmd to the cmds name.
-var CmdToString = map[Cmd]string{
-	Nil:         "Nil",
-	Unknown:     "Unknown",
-	Yes:         "Yes",
-	No:          "No",
-	True:        "True",
-	False:       "False",
-	CtrlC:       "CtrlC",
-	Sudo:        "Sudo",
-	Mpc:         "Mpc",
-	Play:        "Play",
-	Pause:       "Pause",
-	Stop:        "Stop",
-	OK:          "OK",
-	Set:         "Set",
-	Is:          "Is",
-	What:        "What",
-	Same:        "Same",
-	Different:   "Different",
-	When:        "When",
-	Who:         "Who",
-	Where:       "Where",
-	OKgoogle:    "OKgoogle",
-	Alexa:       "Alexa",
-	Music:       "Music",
-	Genre:       "Genre",
-	Classical:   "Classical",
-	Plainsong:   "Plainsong",
-	Vocaloid:    "Vocaloid",
-	Reggae:      "Reggae",
-	Rock:        "Rock",
-	RockAndRoll: "RockAndRoll",
-	Rap:         "Rap",
-	HipHop:      "HipHop",
-	Blues:       "Blues",
-	Shakuhachi:  "Shakuhachi",
-	Grep:        "Grep",
-	Yotsugi:     "Yotsugi",
-}
-
 // GenFakeLabelSet creates a fake LabelSet for testing.
 func GenFakeLabelSet() (output LabelSet) {
 	output.Labels = []Label{
 		Label{
-			Cmd:   Nil,
+			State: Nil,
 			Start: 0,
 			End:   1,
 		},
 		Label{
-			Cmd:   Yes,
+			State: Yes,
 			Start: 1,
 			End:   2,
 		},
 		Label{
-			Cmd:   No,
+			State: No,
 			Start: 2,
 			End:   3,
 		},
 		Label{
-			Cmd:   Nil,
+			State: Nil,
 			Start: 3,
 			End:   4,
 		},
 		Label{
-			Cmd:   Yes,
+			State: Yes,
 			Start: 4,
 			End:   5,
 		},
 		Label{
-			Cmd:   No,
+			State: No,
 			Start: 5,
 			End:   6,
 		},
 		Label{
-			Cmd:   Nil,
+			State: Nil,
 			Start: 6,
 			End:   7,
 		},
 		Label{
-			Cmd:   Yes,
+			State: Yes,
 			Start: 7,
 			End:   8,
 		},
 		Label{
-			Cmd:   No,
+			State: No,
 			Start: 8,
 			End:   9,
 		},
 		Label{
-			Cmd:   Nil,
+			State: Nil,
 			Start: 9,
 			End:   10,
 		},

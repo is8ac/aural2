@@ -98,7 +98,7 @@ func makeRenderMFCC() (renderMFCC func(*libaural2.AudioClip) ([]byte, error), er
 }
 
 func makeRenderProbs() (renderProbs func(*libaural2.AudioClip) ([]byte, error), err error) {
-	graphBytes, err := ioutil.ReadFile("models/cmd_rnn.pb")
+	graphBytes, err := ioutil.ReadFile("../python/models/intent_rnn.pb")
 	if err != nil {
 		return
 	}
@@ -133,8 +133,8 @@ func makeRenderProbs() (renderProbs func(*libaural2.AudioClip) ([]byte, error), 
 }
 
 
-func makeRenderArgmaxedCmds() (renderProbs func(*libaural2.AudioClip) ([]byte, error), err error) {
-	graphBytes, err := ioutil.ReadFile("models/cmd_rnn.pb")
+func makeRenderArgmaxedStates() (renderProbs func(*libaural2.AudioClip) ([]byte, error), err error) {
+	graphBytes, err := ioutil.ReadFile("../python/models/intent_rnn.pb")
 	if err != nil {
 		return
 	}
@@ -173,11 +173,11 @@ func makeRenderArgmaxedCmds() (renderProbs func(*libaural2.AudioClip) ([]byte, e
 }
 
 // argmax returns the index and prob of the largest elements of the list.
-func argmax(probs []float32) (cmd libaural2.Cmd, prob float32) {
+func argmax(probs []float32) (cmd libaural2.State, prob float32) {
 	for i, val := range probs {
 		if val > prob {
 			prob = val
-			cmd = libaural2.Cmd(int32(i))
+			cmd = libaural2.State(int32(i))
 		}
 	}
 	return

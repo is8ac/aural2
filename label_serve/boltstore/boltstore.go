@@ -8,8 +8,6 @@ import (
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 )
 
-var labelSetsBucketName = []byte("labelsets")
-
 var clipBucketName = []byte("clips")
 
 // DB holds
@@ -18,22 +16,21 @@ type DB struct {
 }
 
 // Init creates a new boltDB file, or opens the existing file if it already exists.
-func Init(path string) (db DB, err error) {
+func Init(path string, vocabNames []libaural2.VocabName) (db DB, err error) {
 	db.boltConn, err = bolt.Open(path, 0600, nil)
 	if err != nil {
 		return
 	}
 	db.boltConn.Update(func(tx *bolt.Tx) (err error) {
-		_, err = tx.CreateBucketIfNotExists(labelSetsBucketName)
-		if err != nil {
-			return fmt.Errorf("create bucket: %s", err)
-		}
-		return nil
-	})
-	db.boltConn.Update(func(tx *bolt.Tx) (err error) {
 		_, err = tx.CreateBucketIfNotExists(clipBucketName)
 		if err != nil {
 			return fmt.Errorf("create bucket: %s", err)
+		}
+		for _, vocabName := range vocabNames {
+			_, err = tx.CreateBucketIfNotExists([]byte(vocabName))
+			if err != nil {
+				return fmt.Errorf("create bucket: %s", err)
+			}
 		}
 		return nil
 	})
@@ -53,7 +50,7 @@ func (db DB) PutLabelSet(labelSet libaural2.LabelSet) (err error) {
 		return
 	}
 	err = db.boltConn.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(labelSetsBucketName)
+		b := tx.Bucket([]byte(labelSet.VocabName))
 		b.Put(labelSet.ID[:], serialized)
 		return nil
 	})
@@ -61,17 +58,18 @@ func (db DB) PutLabelSet(labelSet libaural2.LabelSet) (err error) {
 }
 
 // GetLabelSet gets one LabelSet
-func (db DB) GetLabelSet(sampleID libaural2.ClipID) (labelSet libaural2.LabelSet, err error) {
+func (db DB) GetLabelSet(sampleID libaural2.ClipID, vocabName libaural2.VocabName) (labelSet libaural2.LabelSet, err error) {
 	var serialized []byte
 	err = db.boltConn.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(labelSetsBucketName)
+		b := tx.Bucket([]byte(vocabName))
 		serialized = b.Get(sampleID[:])
 		return nil
 	})
 	if len(serialized) == 0 {
 		labelSet = libaural2.LabelSet{
-			ID:     sampleID,
-			Labels: []libaural2.Label{},
+			VocabName: vocabName,
+			ID:        sampleID,
+			Labels:    []libaural2.Label{},
 		}
 		return
 	}
@@ -80,11 +78,11 @@ func (db DB) GetLabelSet(sampleID libaural2.ClipID) (labelSet libaural2.LabelSet
 }
 
 // GetAllLabelSets returns all the labelSets
-func (db DB) GetAllLabelSets() (labelSets map[libaural2.ClipID]libaural2.LabelSet, err error) {
+func (db DB) GetAllLabelSets(vocabName libaural2.VocabName) (labelSets map[libaural2.ClipID]libaural2.LabelSet, err error) {
 	labelSets = map[libaural2.ClipID]libaural2.LabelSet{}
 	db.boltConn.View(func(tx *bolt.Tx) error {
 		// Assume bucket exists and has keys
-		b := tx.Bucket(labelSetsBucketName)
+		b := tx.Bucket([]byte(vocabName))
 		c := b.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			labelSet, err := libaural2.DeserializeLabelSet(v)
@@ -94,27 +92,6 @@ func (db DB) GetAllLabelSets() (labelSets map[libaural2.ClipID]libaural2.LabelSe
 			var clipID libaural2.ClipID
 			copy(clipID[:], k)
 			labelSets[clipID] = labelSet
-		}
-		return nil
-	})
-	return
-}
-
-// ListLabelSets lists all labelSets
-func (db DB) ListLabelSets() (ids []libaural2.ClipID) {
-	db.boltConn.View(func(tx *bolt.Tx) (err error) {
-		// Assume bucket exists and has keys
-		b := tx.Bucket(labelSetsBucketName)
-		c := b.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			_ = v
-			if len(k) != 32 {
-				err = errors.New("hash length must be 32 bytes")
-				return err
-			}
-			var clipID libaural2.ClipID
-			copy(clipID[:], k)
-			ids = append(ids, clipID)
 		}
 		return nil
 	})

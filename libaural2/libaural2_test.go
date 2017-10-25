@@ -12,7 +12,7 @@ func TestSerialize(t *testing.T) {
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:   Yes,
+				State: Yes,
 				Start: 1.23,
 				End:   2.23,
 			},
@@ -35,39 +35,39 @@ func TestSerialize(t *testing.T) {
 	}
 }
 
-func TestToCmdArray(t *testing.T) {
+func TestToStateArray(t *testing.T) {
 	hash := sha256.Sum256([]byte("some fake raw data"))
 	labelSet := LabelSet{
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:   Yes,
+				State: Yes,
 				Start: 0.23,
 				End:   1.23,
 			},
 			Label{
-				Cmd:   Nil,
+				State: Nil,
 				Start: 2.23,
 				End:   3.23,
 			},
 			Label{
-				Cmd:   No,
+				State: No,
 				Start: 4.23,
 				End:   5.23,
 			},
 			Label{
-				Cmd:   Unknown,
+				State: Unknown,
 				Start: 6.23,
 				End:   7.23,
 			},
 			Label{
-				Cmd:   No,
+				State: No,
 				Start: 8.23,
 				End:   9.23,
 			},
 		},
 	}
-	cmdArray := labelSet.ToCmdArray()
+	cmdArray := labelSet.ToStateArray()
 	if cmdArray[0] != Nil {
 		t.Fatal("!silence")
 	}
@@ -79,27 +79,27 @@ func TestIsGood(t *testing.T) {
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:   No,
+				State: No,
 				Start: 0.23,
 				End:   1.23,
 			},
 			Label{
-				Cmd:   Yes,
+				State: Yes,
 				Start: 2.23,
 				End:   3.23,
 			},
 			Label{
-				Cmd:   No,
+				State: No,
 				Start: 4.23,
 				End:   5.23,
 			},
 			Label{
-				Cmd:   Yes,
+				State: Yes,
 				Start: 6.23,
 				End:   7.23,
 			},
 			Label{
-				Cmd:   Unknown,
+				State: Unknown,
 				Start: 8.23,
 				End:   9.23,
 			},
@@ -112,12 +112,12 @@ func TestIsGood(t *testing.T) {
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:   No,
+				State: No,
 				Start: 0.23,
 				End:   3.4,
 			},
 			Label{
-				Cmd:   Yes,
+				State: Yes,
 				Start: 3.21,
 				End:   5.0,
 			},
@@ -130,12 +130,12 @@ func TestIsGood(t *testing.T) {
 		ID: hash,
 		Labels: []Label{
 			Label{
-				Cmd:   No,
+				State: No,
 				Start: -2.0,
 				End:   3.4,
 			},
 			Label{
-				Cmd:   Yes,
+				State: Yes,
 				Start: 9.21,
 				End:   10.3,
 			},
