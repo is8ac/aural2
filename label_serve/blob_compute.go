@@ -16,6 +16,8 @@ import (
 	"strconv"
 )
 
+const modelPath = "../python/models/intent_rnn.pb"
+
 func getAudioClipFromFS(id libaural2.ClipID) (audioClip *libaural2.AudioClip, err error) {
 	rawBytes, err := ioutil.ReadFile("audio/" + id.FSsafeString() + ".raw")
 	if err != nil {
@@ -98,7 +100,7 @@ func makeRenderMFCC() (renderMFCC func(*libaural2.AudioClip) ([]byte, error), er
 }
 
 func makeRenderProbs() (renderProbs func(*libaural2.AudioClip) ([]byte, error), err error) {
-	graphBytes, err := ioutil.ReadFile("../python/models/intent_rnn.pb")
+	graphBytes, err := ioutil.ReadFile(modelPath)
 	if err != nil {
 		return
 	}
@@ -134,7 +136,7 @@ func makeRenderProbs() (renderProbs func(*libaural2.AudioClip) ([]byte, error), 
 
 
 func makeRenderArgmaxedStates() (renderProbs func(*libaural2.AudioClip) ([]byte, error), err error) {
-	graphBytes, err := ioutil.ReadFile("../python/models/intent_rnn.pb")
+	graphBytes, err := ioutil.ReadFile(modelPath)
 	if err != nil {
 		return
 	}

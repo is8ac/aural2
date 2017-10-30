@@ -27,6 +27,16 @@ func ReadWaveToPCM(s *op.Scope) (filePath, pcm tf.Output) {
 	return
 }
 
+// ReadRawToPCM returns a placeholder for a filepath to an int16le raw file, and an output for float PCM
+func ReadRawToPCM(s *op.Scope) (filePath, pcm tf.Output) {
+	filePath = op.Placeholder(s.SubScope("file_path"), tf.String) // placeholder to be filled with the file path at run time
+	rawBytes := op.ReadFile(s.SubScope("read_file"), filePath)    // read in the wav file
+	int16PCM := op.DecodeRaw(s.SubScope("decode_raw"), rawBytes, tf.Int16)
+	floats := op.Cast(s.SubScope("cast"), int16PCM, tf.Float)
+	pcm = op.Div(s.SubScope("rescale"), floats, op.Const(s.SubScope("16pow"), float32(65536)))
+	return
+}
+
 // ParseWavBytesToPCM returns a placeholder for []byte of an int16le wav file, and an output for float PCM
 func ParseWavBytesToPCM(s *op.Scope) (wavBytes, pcm tf.Output) {
 	wavBytes = op.Placeholder(s.SubScope("file_path"), tf.String)                    // placeholder to be filled with the bytes of a wav file
@@ -323,7 +333,7 @@ func MakeProbsTensorToImage() (probsToImage func(*tf.Tensor) ([]byte, error), er
 	permutations := op.Const(s.SubScope("permutations"), []int32{1, 0})                       // the dims to be permuted, dim 0 is swiched with dim 1
 	transposed := op.Transpose(s.SubScope("rotate"), probsPH, permutations)                   // switch vertical and horizontal axis
 	rgb := op.Pack(s.SubScope("pack"), []tf.Output{transposed}, op.PackAxis(2))               // stack the values and the ones up into hsv. Hue is the normalized values, saturation and value are 1
-	rescaled := op.Mul(s.SubScope("rescale"), rgb, op.Const(s.SubScope("256"), float32(256))) // convert the floats from 0-1, to 0-255
+	rescaled := op.Mul(s.SubScope("rescale"), rgb, op.Const(s.SubScope("256"), float32(255))) // convert the floats from 0-1, to 0-255
 	int8RGB := op.Cast(s.SubScope("cast"), rescaled, tf.Uint8)                                // cast them to uint8
 	jpegBytesOP := op.EncodeJpeg(s.SubScope("jpeg"), int8RGB)                                 // encode to jpeg
 

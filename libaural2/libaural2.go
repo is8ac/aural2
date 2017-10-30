@@ -40,7 +40,7 @@ const AudioClipLen int = SamplePerClip * 2
 const InputSize int = 13
 
 // BatchSize is the size of the one batch
-const BatchSize int = 5
+const BatchSize int = 7
 
 // StateList is a list of States
 type StateList [StridesPerClip]State
