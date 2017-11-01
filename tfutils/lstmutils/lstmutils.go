@@ -45,7 +45,7 @@ func LoadGraph(graphDefBytes []byte, scopeName string) (session *tf.Session, inp
 	// zerosOP is an OP that returns a tensor of zeros of shape [1, `n`] where `n` is the size of the LSTM state.
 	zerosOP := graph.Operation("zeros")
 	if zerosOP == nil {
-		logger.Println(err)
+		err = errors.New("can't find zeros op")
 		return
 	}
 	// pull on the OP to get the zerosTensor
