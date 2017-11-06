@@ -50,6 +50,8 @@ var Vocabulary = libaural2.Vocabulary{
 		GangstaRap:  "GangstaRap",
 		Punk:        "Punk",
 		Alternative: "Alternative",
+		Welcome:     "Welcome",
+		Hello:       "Hello",
 	},
 	Hue: map[libaural2.State]float64{
 		Stop: 0.1,
@@ -95,6 +97,8 @@ var Vocabulary = libaural2.Vocabulary{
 		"4": GangstaRap,
 		"P": Punk,
 		"a": Alternative,
+		"W": Welcome,
+		"H": Hello,
 	},
 }
 
@@ -141,4 +145,6 @@ const (
 	GangstaRap
 	Punk
 	Alternative
+	Welcome
+	Hello
 )
