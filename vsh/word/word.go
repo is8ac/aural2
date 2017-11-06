@@ -7,7 +7,7 @@ import (
 // Vocabulary is the set of words the user can say.
 var Vocabulary = libaural2.Vocabulary{
 	Name: "word",
-	Size: 40,
+	Size: 50,
 	Names: map[libaural2.State]string{
 		Nil:         "Nil",
 		Unknown:     "Unknown",
@@ -46,6 +46,10 @@ var Vocabulary = libaural2.Vocabulary{
 		Shakuhachi:  "Shakuhachi",
 		Grep:        "Grep",
 		Yotsugi:     "Yotsugi",
+		Emo:         "Emo",
+		GangstaRap:  "GangstaRap",
+		Punk:        "Punk",
+		Alternative: "Alternative",
 	},
 	Hue: map[libaural2.State]float64{
 		Stop: 0.1,
@@ -87,6 +91,10 @@ var Vocabulary = libaural2.Vocabulary{
 		"j": Shakuhachi,
 		"x": Grep,
 		"Y": Yotsugi,
+		"e": Emo,
+		"4": GangstaRap,
+		"P": Punk,
+		"a": Alternative,
 	},
 }
 
@@ -129,4 +137,8 @@ const (
 	Shakuhachi
 	Yotsugi
 	Grep
+	Emo
+	GangstaRap
+	Punk
+	Alternative
 )

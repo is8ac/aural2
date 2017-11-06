@@ -110,6 +110,7 @@ func evalVars(varNames []string, graph *tf.Graph, sess *tf.Session) (tensors []*
 			err = errors.New("can't find node " + name) // complain
 			return
 		}
+		logger.Println(op.Output(0).Shape(), op.Name())
 		varOutputs[i] = op.Output(0) // if not, put the operations first output in the list of outputs
 	}
 	tensors, err = sess.Run( // run graph, pulling on all the vars.

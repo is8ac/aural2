@@ -192,15 +192,15 @@ def main():
             "batch_size": 7,
             "dropout": 0.0,
             "embedding_size": 0,
-            "hidden_size": 64,
+            "hidden_size": 8,
             "input_dropout": 0.0,
             "input_size": 13,
             "learning_rate": 0.001,
             "max_grad_norm": 5.0,
-            "num_layers": 2,
+            "num_layers": 1,
             "num_unrollings": 100,
             "full_seq_len": 312,
-            "output_size": 40,
+            "output_size": 20,
             "vocab_name": "intent",
             }
 

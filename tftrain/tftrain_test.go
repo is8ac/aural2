@@ -156,6 +156,7 @@ func TestStepTrainLinear(t *testing.T) {
 	}
 }
 
+
 func TestStepTrainLSTM(t *testing.T) {
 	graph, err := loadTrainGraph("models/lstm_train.pb")
 	if err != nil {
@@ -215,5 +216,4 @@ func TestStepTrainLSTM(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatal("wrong len")
 	}
-	logger.Println(results[0].Value())
 }

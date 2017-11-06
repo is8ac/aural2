@@ -77,7 +77,7 @@ func main() {
 			hasSkipped = false
 		}
 		state, prob := vsh.Argmax(result["intent"])
-		if state == intent.UploadClip && prob > 0.7 {
+		if state == intent.UploadClip && prob > 0.9 {
 			logger.Println(intent.Vocabulary.Names[state], prob)
 			if lastUploaded.Add(10 * time.Second).Before(time.Now()) {
 				go func() {
