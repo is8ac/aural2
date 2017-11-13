@@ -136,6 +136,7 @@ func TestStepTrainLinear(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
+	logger.Println(loss1, loss2)
 	if !(loss2 < loss1) {
 		t.Fatal("loss did not decrease")
 	}

@@ -56,12 +56,6 @@ func main() {
 			logger.Println("Error:", err)
 		}
 	}()
-	go func() {
-		for subsystem := range w.Event {
-			//log.Println("Changed subsystem:", subsystem)
-		}
-	}()
-
 	intentGraphBytes, err := ioutil.ReadFile("models/intent.pb")
 	if err != nil {
 		panic(err)
@@ -86,7 +80,7 @@ func main() {
 	eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "play", vsh.MakeDefaultAction(func() { client.Pause(false) }))
 	eb.Register(intent.Vocabulary.Name, intent.UploadClip, "upload", vsh.Action{
 		MinActivationProb: 0.9,
-		MaxResetProb:      0.1,
+		MaxResetProb:      0.5,
 		CoolDownDuration:  10 * time.Second,
 		TimeLastCalled:    time.Now(),
 		HandlerFunction: func(prob float32) {
@@ -107,7 +101,7 @@ func main() {
 		eb.Unregister(word.Vocabulary.Name, word.Hello, "sound_test")
 	}))
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second)
 	// now start playing audio.
 	f, err := os.Open("audio/hello.wav")
 	if err != nil {

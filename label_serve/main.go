@@ -193,7 +193,6 @@ func makeServeTrainingDataGraphdef(getAllLabelSets func(libaural2.VocabName) (ma
 func makeWriteLabelsSet(put func(libaural2.LabelSet) error) func(http.ResponseWriter, *http.Request) {
 	nilID := libaural2.ClipID{}
 	return func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("putting labelset")
 		audioIDstring := mux.Vars(r)["sampleID"]
 		vocabName := libaural2.VocabName(mux.Vars(r)["vocab"])
 		sampleID, err := parseURLvar(audioIDstring)
@@ -202,6 +201,7 @@ func makeWriteLabelsSet(put func(libaural2.LabelSet) error) func(http.ResponseWr
 			http.Error(w, "", http.StatusBadRequest)
 			return
 		}
+		logger.Println("putting", sampleID.String(), "to", vocabName)
 		serialized, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			logger.Println(err)
