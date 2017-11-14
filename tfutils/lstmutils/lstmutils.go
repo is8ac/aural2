@@ -15,19 +15,9 @@ const outputname = "/softmax/output"
 const inputname = "/inputs"
 
 // LoadGraph loads the TF graph from the bytes of an LSTM graphdef, and returns a
-func LoadGraph(graphDefBytes []byte, scopeName string) (session *tf.Session, input, output tf.Output, statePlaceholders, stateFetches []tf.Output, stateFeeds map[tf.Output]*tf.Tensor, err error) {
-	graph := tf.NewGraph() // make a new graph,
-	// and import the graphdef into it.
-	if err = graph.Import(graphDefBytes, ""); err != nil {
-		logger.Println(err)
-		return
-	} // Do we still have a nil graph?
-	if graph == nil {
-		err = errors.New("graph is nil")
-		return
-	}
+func LoadGraph(savedModel tf.SavedModel, scopeName string) (session *tf.Session, input, output tf.Output, statePlaceholders, stateFetches []tf.Output, stateFeeds map[tf.Output]*tf.Tensor, err error) {
 	// read in the two lists of state OP names
-	initialStateNames, finalStateNames, err := readStateNames(graph, scopeName)
+	initialStateNames, finalStateNames, err := readStateNames(savedModel.Graph, scopeName)
 	if err != nil {
 		return
 	}
@@ -36,27 +26,27 @@ func LoadGraph(graphDefBytes []byte, scopeName string) (session *tf.Session, inp
 	stateFetches = make([]tf.Output, len(finalStateNames))        // fetches are the outputs we pull on to get the tensors of final state.
 	statePlaceholders = make([]tf.Output, len(initialStateNames)) // placeholders is a list of input placeholders. It contains the same elements as stateFeeds, but is needed becouse maps do not have a stable ordering.
 	// Create a session for inference over graph.
-	session, err = tf.NewSession(graph, nil)
+	session, err = tf.NewSession(savedModel.Graph, nil)
 	if err != nil {
 		logger.Println(err)
 		return
 	}
 
 	// zerosOP is an OP that returns a tensor of zeros of shape [1, `n`] where `n` is the size of the LSTM state.
-	zerosOP := graph.Operation("zeros")
+	zerosOP := savedModel.Graph.Operation("zeros")
 	if zerosOP == nil {
 		err = errors.New("can't find zeros op")
 		return
 	}
 	// pull on the OP to get the zerosTensor
-	result, err := session.Run(map[tf.Output]*tf.Tensor{}, []tf.Output{zerosOP.Output(0)}, nil)
+	result, err := savedModel.Session.Run(map[tf.Output]*tf.Tensor{}, []tf.Output{zerosOP.Output(0)}, nil)
 	if err != nil {
 		logger.Println(err)
 		return
 	}
 	zeroTensor := result[0]
 	for i, name := range initialStateNames { // for each name in the initial state outputs,
-		operation := graph.Operation(name) // Get the operation out of the graph.
+		operation := savedModel.Graph.Operation(name) // Get the operation out of the graph.
 		if operation == nil {
 			err = errors.New("can't find op '" + name + "' in graph")
 			return
@@ -69,7 +59,7 @@ func LoadGraph(graphDefBytes []byte, scopeName string) (session *tf.Session, inp
 	}
 	// Now we do somthing similar for the state outputs
 	for i, name := range finalStateNames { // for each name in the list of final state names,
-		operation := graph.Operation(name)
+		operation := savedModel.Graph.Operation(name)
 		if operation == nil {
 			err = errors.New("can't find op '" + name + "' in graph")
 			return
@@ -77,14 +67,14 @@ func LoadGraph(graphDefBytes []byte, scopeName string) (session *tf.Session, inp
 		stateFetches[i] = operation.Output(0) // put the output of the OP in the list of state outputs to be pulled on.
 	}
 	// We are now done with state, we just need to get the input and output.
-	operation := graph.Operation(scopeName + inputname) // get the input placeholder
+	operation := savedModel.Graph.Operation(scopeName + inputname) // get the input placeholder
 	if operation == nil {
 		err = errors.New("can't find op '" + scopeName + outputname + "' in graph")
 		return
 	}
 	input = operation.Output(0) // assign the OPs output to `input`.
 
-	operation = graph.Operation(scopeName + outputname) // get the output OP
+	operation = savedModel.Graph.Operation(scopeName + outputname) // get the output OP
 	if operation == nil {
 		err = errors.New("can't find op '" + scopeName + outputname + "' in graph")
 		return
@@ -128,8 +118,8 @@ func readStateNames(graph *tf.Graph, scopeName string) (initialStateNames, final
 }
 
 // MakeSeqInference returns a function that takes an output of a slice of mfccs of one clip, and returns a [][]float32 labels.
-func MakeSeqInference(graphBytes []byte) (seqInference func(*tf.Tensor) (*tf.Tensor, error), err error) {
-	sess, input, output, _, _, _, err := LoadGraph(graphBytes, "seq_inference")
+func MakeSeqInference(savedModel tf.SavedModel) (seqInference func(*tf.Tensor) (*tf.Tensor, error), err error) {
+	sess, input, output, _, _, _, err := LoadGraph(savedModel, "seq_inference")
 	if err != nil {
 		return
 	}
@@ -145,8 +135,8 @@ func MakeSeqInference(graphBytes []byte) (seqInference func(*tf.Tensor) (*tf.Ten
 }
 
 // MakeStepInference returns a function that takes an output of a slice of mfccs of one clip, and returns a [][]float32 labels.
-func MakeStepInference(graphBytes []byte) (stepInference func(*tf.Tensor) ([]float32, error), err error) {
-	sess, input, output, placeholders, fetches, feeds, err := LoadGraph(graphBytes, "step_inference")
+func MakeStepInference(savedModel tf.SavedModel) (stepInference func(*tf.Tensor) ([]float32, error), err error) {
+	sess, input, output, placeholders, fetches, feeds, err := LoadGraph(savedModel, "step_inference")
 	if err != nil {
 		return
 	}

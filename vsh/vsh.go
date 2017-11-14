@@ -103,13 +103,13 @@ func uploadClip(clip *libaural2.AudioClip) (err error) {
 }
 
 // Init takes a reader of raw audio, and returns a chan of outputs.
-func Init(reader io.Reader, graphs map[libaural2.VocabName][]byte) (result chan map[libaural2.VocabName][]float32, dump func() *libaural2.AudioClip, err error) {
+func Init(reader io.Reader, graphs map[libaural2.VocabName]tf.SavedModel) (result chan map[libaural2.VocabName][]float32, dump func() *libaural2.AudioClip, err error) {
 	rb := makeRing()
 	dump = rb.dump
 	result = make(chan map[libaural2.VocabName][]float32)
 	stepInferenceFuncs := map[libaural2.VocabName]func(*tf.Tensor) ([]float32, error){}
-	for vocabName, graphBytes := range graphs {
-		stepInferenceFuncs[vocabName], err = lstmutils.MakeStepInference(graphBytes)
+	for vocabName, savedModel := range graphs {
+		stepInferenceFuncs[vocabName], err = lstmutils.MakeStepInference(savedModel)
 		if err != nil {
 			return
 		}

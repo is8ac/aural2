@@ -29,8 +29,8 @@ def main():
             "num_unrollings": 100,
             "full_seq_len": 312,
             "output_size": 50,
-            "num_batches": 300,
-            "vocab_name": "intent",
+            "num_batches": 3000,
+            "vocab_name": "word",
             }
 
     # Create graphs

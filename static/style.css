@@ -1,0 +1,65 @@
+html {
+  background-color: black;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+}
+body {
+  padding: 0;
+  margin: 0;
+  color: white;
+  margin: 0;
+  height: 100%;
+  position: fixed;
+  width: 100%;
+}
+.pixelated {
+    display: block;
+    font-size: 0;
+    image-rendering: optimizeSpeed;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -o-crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: optimize-contrast;
+    -ms-interpolation-mode: nearest-neighbor;
+    image-rendering: pixelated;
+}
+
+.timeviz {
+  width: 100%;
+}
+
+#curser{
+  width: 3px;
+  height: 100%;
+  background-color: red;
+  position: absolute;
+}
+
+#spectrogram{
+  height: 50%;
+}
+#mfcc{
+  height: 10%;
+}
+
+#labels-container {
+  height: 5%;
+}
+
+#labelset{
+  height: 5%;
+}
+
+#probs {
+  height: 25%;
+}
+
+#argmax {
+  height: 5%;
+}
+.label{
+  width: 5px;
+  height: 5%;
+  position: absolute;
+}

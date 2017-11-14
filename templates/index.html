@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aural2 tagUI</title>
+  <meta name="theme-color" content="black">
+</head>
+
+<body>
+  {{$vocabName := .VocabName}}
+  {{ range $id := index $.IDs}}
+      <h2><a href="/tagui/{{$vocabName}}/{{$id.FSsafeString}}">{{$id.String}}</a></h2>
+  {{ end }}
+
+</body>
+
+</html>
