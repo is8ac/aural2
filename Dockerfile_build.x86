@@ -1,6 +1,13 @@
 FROM ubuntu:16.04
 
-RUN apt-get update && apt-get install -y curl git build-essential
+RUN apt-get update && apt-get install -y \
+  curl \
+  git \
+  build-essential \
+  libasound2-dev \
+  python-pip
+
+RUN pip install tensorflow
 
 RUN curl -L \
 "https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz" | \
@@ -27,16 +34,8 @@ RUN go get \
   github.com/fhs/gompd/mpd \
   github.com/golang/protobuf/proto \
   github.com/gorilla/mux \
-  github.com/lucasb-eyer/go-colorful
+  github.com/lucasb-eyer/go-colorful \
+  github.com/hajimehoshi/oto \
+  honnef.co/go/js/xhr
 
 RUN cd /root/go/src/github.com/tensorflow/tensorflow && git checkout v1.4.0
-
-RUN apt-get install -y libasound2-dev
-
-RUN go get \
-  github.com/hajimehoshi/oto
-
-RUN go get honnef.co/go/js/xhr
-
-RUN apt-get install -y python-pip
-RUN pip install tensorflow

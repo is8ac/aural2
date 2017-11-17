@@ -179,21 +179,23 @@ func start() {
 	})
 	w.AddEventListener("keydown", false, func(event dom.Event) {
 		ke := event.(*dom.KeyboardEvent)
-		state, prs := vocab.KeyMapping[ke.Key]
-		if prs {
-			if ke.Key != currentlyDepressedKey {
-				currentlyDepressedKey = ke.Key
-				label := la.Label{
-					State: state,
-					Start: audio.Get("currentTime").Float(),
+		if !ke.AltKey {
+			state, prs := vocab.KeyMapping[ke.Key]
+			if prs {
+				if ke.Key != currentlyDepressedKey {
+					currentlyDepressedKey = ke.Key
+					label := la.Label{
+						State: state,
+						Start: audio.Get("currentTime").Float(),
+					}
+					curLabel = label
+					setEnd = createLabelMarker(curLabel)
 				}
-				curLabel = label
-				setEnd = createLabelMarker(curLabel)
 			}
 		}
-		//if ke.Key == "s" {
-		//	go postLabelsSet(labelsSet)
-		//}
+		if ke.Key == "s" && ke.AltKey {
+			go postLabelsSet(labelsSet)
+		}
 		if ke.Key == "Delete" {
 			labelsSet.Labels = []la.Label{}
 			labelsElm := d.GetElementByID("labels").(*dom.HTMLDivElement)

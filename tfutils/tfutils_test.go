@@ -242,11 +242,11 @@ func TestRenderImage(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-	filePathPH, pcmOP := ReadWaveToPCM(s.SubScope("read_pcm"))                  // read in the wav file and convert to float32 pcm
-	mfccOP, sampleRatePH := ComputeMFCC(s, pcmOP)                               // compute MFCC
+	filePathPH, pcmOP := ReadWaveToPCM(s.SubScope("read_pcm"))               // read in the wav file and convert to float32 pcm
+	mfccOP, sampleRatePH := ComputeMFCC(s, pcmOP)                            // compute MFCC
 	specgramOP := ComputeSpectrogram(s.SubScope("spectrogram"), pcmOP, 0, 0) // compute spectrogram
-	mfccJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), mfccOP)            // render image of mfcc
-	specgramJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), specgramOP)    // render image of spectrogram.
+	mfccJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), mfccOP)         // render image of mfcc
+	specgramJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), specgramOP) // render image of spectrogram.
 	graph, err := s.Finalize()
 	if err != nil {
 		logger.Println(err)
@@ -377,7 +377,7 @@ func TestBytesToBytes1(t *testing.T) {
 	s := op.NewScope()
 	wavBytesPH, pcm := ParseWavBytesToPCM(s)
 	specgramOP := ComputeSpectrogram(s.SubScope("spectrogram"), pcm, 10, 40) // compute spectrogram
-	specgramJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), specgramOP)  // render image of spectrogram.
+	specgramJpegBytesOP := RenderImage(s.SubScope("jpeg_bytes"), specgramOP) // render image of spectrogram.
 	feeds := map[tf.Output]*tf.Tensor{}
 	renderImage, err := BytesToBytes(s, wavBytesPH, specgramJpegBytesOP, feeds)
 	if err != nil {
@@ -537,68 +537,10 @@ func TestMakeCleanWav(t *testing.T) {
 
 var hash = libaural2.ClipID{}
 var labelSets = []libaural2.LabelSet{
-		libaural2.LabelSet{
-			ID: hash,
-			Labels: []libaural2.Label{
-				libaural2.Label{
-					Cmd:   libaural2.Who,
-					Start: 1.23,
-					End:   2.8,
-				},
-				libaural2.Label{
-					Cmd:   libaural2.What,
-					Start: 3.23,
-					End:   4.8,
-				},
-				libaural2.Label{
-					Cmd:   libaural2.When,
-					Start: 5.23,
-					End:   6.8,
-				},
-			},
-		},
-		libaural2.LabelSet{
-			ID: hash,
-			Labels: []libaural2.Label{
-				libaural2.Label{
-					Cmd:   libaural2.Yes,
-					Start: 1.23,
-					End:   2.8,
-				},
-				libaural2.Label{
-					Cmd:   libaural2.No,
-					Start: 3.23,
-					End:   4.8,
-				},
-			},
-		},
-		libaural2.LabelSet{
-			ID: hash,
-			Labels: []libaural2.Label{
-				libaural2.Label{
-					Cmd:  libaural2.OKgoogle,
-					Start: 1.23,
-					End: 2.8,
-				},
-			},
-		},
-		libaural2.LabelSet{
-			ID: hash,
-			Labels: []libaural2.Label{
-				libaural2.Label{
-					Cmd:  libaural2.Alexa,
-					Start: 1.95,
-					End: 2.8,
-				},
-				libaural2.Label{
-					Cmd:  libaural2.CtrlC,
-					Start: 3.23,
-					End: 4.02,
-				},
-			},
-		},
-	}
-
+	libaural2.GenFakeLabelSet(),
+	libaural2.GenFakeLabelSet(),
+	libaural2.GenFakeLabelSet(),
+}
 
 func TestEmbedTrainingData(t *testing.T) {
 	var inputs [][][]float32
@@ -612,7 +554,7 @@ func TestEmbedTrainingData(t *testing.T) {
 			input[i] = mfcc
 		}
 		inputs = append(inputs, input)
-		outputs = append(outputs, labelSet.ToCmdIDArray())
+		outputs = append(outputs, labelSet.ToStateIDArray())
 		ids = append(ids, labelSet.ID)
 	}
 	numSubSeqs := 5
@@ -683,42 +625,42 @@ func TestEmbedTrainingData(t *testing.T) {
 	}
 }
 
-func genFakeLabelSet()(output libaural2.LabelSet) {
+func genFakeLabelSet() (output libaural2.LabelSet) {
 	output.Labels = []libaural2.Label{
 		libaural2.Label{
-			Cmd: libaural2.Nil,
+			State: libaural2.Nil,
 			Start: 0,
-			End: 1,
+			End:   1,
 		},
 		libaural2.Label{
-			Cmd: libaural2.Yes,
+			State: libaural2.Yes,
 			Start: 1,
-			End: 2,
+			End:   2,
 		},
 		libaural2.Label{
-			Cmd: libaural2.No,
+			State: libaural2.No,
 			Start: 2,
-			End: 3,
+			End:   3,
 		},
 		libaural2.Label{
-			Cmd: libaural2.Nil,
+			State: libaural2.Nil,
 			Start: 4,
-			End: 5,
+			End:   5,
 		},
 		libaural2.Label{
-			Cmd: libaural2.Yes,
+			State: libaural2.Yes,
 			Start: 6,
-			End: 7,
+			End:   7,
 		},
 		libaural2.Label{
-			Cmd: libaural2.No,
+			State: libaural2.No,
 			Start: 8,
-			End: 9,
+			End:   9,
 		},
 		libaural2.Label{
-			Cmd: libaural2.Nil,
+			State: libaural2.Nil,
 			Start: 9,
-			End: 10,
+			End:   10,
 		},
 	}
 	return

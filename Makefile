@@ -27,11 +27,8 @@ target/builddockerimage: Dockerfile_build.$(SYSTEM_ARCH)
 	docker build -t aural2_build -f Dockerfile_build.$(SYSTEM_ARCH) .
 	touch target/builddockerimage
 
-dockerimagesquash: target/dockerimage
-	docker export `docker run -d $(REG_PATH)/aural2 ls` | docker import --change "CMD /start.sh" - $(REG_PATH)/aural2:$(VERSION)
-
 push: dockerimagesquash
-	docker push $(REG_PATH)/aural2:$(VERSION)
+	docker push $(REG_PATH)/aural2:latest
 
 clean:
 	rm target/*
