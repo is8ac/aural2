@@ -5,14 +5,15 @@ import (
 	"log"
 	"os"
 
-	"github.com/fhs/gompd/mpd"
+	"time"
+
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 	"github.ibm.com/Blue-Horizon/aural2/boltstore"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
+	"github.ibm.com/Blue-Horizon/aural2/tftrain"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils/lstmutils"
 	"github.ibm.com/Blue-Horizon/aural2/vsh/intent"
 	"github.ibm.com/Blue-Horizon/aural2/vsh/word"
-	"time"
 )
 
 var logger = log.New(os.Stdout, "arl2: ", log.Lshortfile)
@@ -22,36 +23,32 @@ func main() {
 		&word.Vocabulary,
 		&intent.Vocabulary,
 	}
-	models := map[libaural2.VocabName]tf.SavedModel{}                                   // get the savedModel
-	seqInferenceFuncs := map[libaural2.VocabName]func(*tf.Tensor) (*tf.Tensor, error){} // get the function to do inference on a whole clip
-	vocabs := map[libaural2.VocabName]*libaural2.Vocabulary{}                           // get the vocabulary struct
-	namesPrs := map[libaural2.VocabName]bool{}                                          // check if the vocab name exists.
-	for _, vocab := range vocabList {
+	vocabs := map[libaural2.VocabName]*libaural2.Vocabulary{} // map to get the vocabulary struct
+	namesPrs := map[libaural2.VocabName]bool{}                // map to check if the vocab name exists
+	onlineSessions := map[libaural2.VocabName]*tftrain.OnlineSess{}
+	stepInferenceFuncs := map[libaural2.VocabName]func(*tf.Tensor) ([]float32, error){}
+	graphBytes, err := ioutil.ReadFile("target/train_graph.pb") // save graph for each vocab
+	if err != nil {
+		logger.Fatalln(err)
+	}
+	for _, vocab := range vocabList { // for each vocab,
 		vocabs[vocab.Name] = vocab
 		namesPrs[vocab.Name] = true
-		graphBytes, err := ioutil.ReadFile("models/" + string(vocab.Name) + ".pb")
-		if err != nil {
-			logger.Fatalln(err)
-		}
-    graph := tf.NewGraph()
+		graph := tf.NewGraph()
 		err = graph.Import(graphBytes, "")
 		if err != nil {
 			logger.Fatalln(err)
 		}
-		sess, err := tf.NewSession(graph, nil)
-    savedModel := tf.SavedModel{
-      Graph: graph,
-      Session: sess,
-    }
+		oSess, err := tftrain.NewOnlineSess(graph, "training/inputs", "training/targets", "training/Adam", "init", "training/loss_monitor/div", "seq_inference/softmax/output", "seq_inference/inputs", []string{})
 		if err != nil {
 			logger.Fatalln(err)
 		}
-		models[vocab.Name] = savedModel
-		seqFunc, err := lstmutils.MakeSeqInference(savedModel)
+		onlineSessions[vocab.Name] = &oSess
+		stepInfFunc, err := lstmutils.MakeStepInference(oSess)
 		if err != nil {
 			logger.Fatalln(err)
 		}
-		seqInferenceFuncs[vocab.Name] = seqFunc
+		stepInferenceFuncs[vocab.Name] = stepInfFunc
 	}
 	db, err := boltstore.Init("label_store.db", []libaural2.VocabName{"word", "intent"})
 	if err != nil {
@@ -68,21 +65,13 @@ func main() {
 			return
 		}
 	}
-	client, err := mpd.Dial("tcp", "localhost:6600")
+	tdmMap, err := startTrainingLoops(db, onlineSessions)
 	if err != nil {
-		log.Fatalln(err)
+		logger.Fatalln(err)
 	}
-	defer client.Close()
-	go func() {
-		for {
-			client.Ping()
-			time.Sleep(time.Second)
-		}
-	}()
-	go startVsh(saveFunc, client, models)
-	go serve(db, seqInferenceFuncs, namesPrs)
-  go startTrainingLoops(db, vocabList)
-  for {
+	dumpClip := startVsh(saveFunc, stepInferenceFuncs)
+	go serve(db, onlineSessions, namesPrs, dumpClip, tdmMap)
+	for {
 		time.Sleep(time.Hour)
 	}
 }

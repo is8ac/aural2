@@ -13,14 +13,11 @@ import (
 
 	"encoding/base32"
 
-	tf "github.com/tensorflow/tensorflow/tensorflow/go"
-	"github.com/tensorflow/tensorflow/tensorflow/go/op"
-
 	"github.com/gorilla/mux"
 	"github.ibm.com/Blue-Horizon/aural2/boltstore"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
-	"github.ibm.com/Blue-Horizon/aural2/tfutils"
-	"repo.hovitos.engineering/MTN/wave/cloud/application/aural/urbitname"
+	"github.ibm.com/Blue-Horizon/aural2/tftrain"
+	"github.ibm.com/Blue-Horizon/aural2/urbitname"
 )
 
 func parseURLvar(urlVar string) (clipID libaural2.ClipID, err error) {
@@ -46,6 +43,7 @@ func makeMakeServeAudioDerivedBlob(vocabPrs map[libaural2.VocabName]bool) func(c
 		return func(w http.ResponseWriter, r *http.Request) {
 			vocabName := libaural2.VocabName(mux.Vars(r)["vocab"])
 			if !vocabPrs[vocabName] {
+				logger.Println("not in map")
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -109,85 +107,6 @@ func makeServeLabelsSetDerivedBlob(
 		w.Header().Set("Content-Length", strconv.Itoa(len(serialized)))
 		w.Header().Set("Accept-Ranges", "bytes")
 		w.Write(serialized)
-	}
-}
-
-// makeServeTrainingDataGraphdef makes a handler func to serve a graphdef that, when pulled on, will give training data.
-func makeServeTrainingDataGraphdef(getAllLabelSets func(libaural2.VocabName) (map[libaural2.ClipID]libaural2.LabelSet, error), vocabPrs map[libaural2.VocabName]bool) func(http.ResponseWriter, *http.Request) {
-	s := op.NewScope()
-	bytesPH, pcm := tfutils.ParseRawBytesToPCM(s)
-	mfccOP, sampleRatePH := tfutils.ComputeMFCC(s.SubScope("spectrogram"), pcm)
-	sampleRateTensor, err := tf.NewTensor(int32(libaural2.SampleRate))
-	if err != nil {
-		logger.Fatalln(err)
-	}
-	graph, err := s.Finalize() // finalize the scope to get the graph
-	if err != nil {
-		logger.Fatalln(err)
-	}
-	sess, err := tf.NewSession(graph, nil) // start a new TF session
-	if err != nil {
-		logger.Fatalln(err)
-	}
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		vocabName := libaural2.VocabName(mux.Vars(r)["vocab"])
-		if !vocabPrs[vocabName] {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		labelSets, err := getAllLabelSets(vocabName)
-		if err != nil {
-			logger.Println(err)
-			http.Error(w, "", http.StatusInternalServerError)
-			return
-		}
-		logger.Println(len(labelSets))
-		var inputs [][][]float32
-		var outputs [][libaural2.StridesPerClip]int32
-		var ids []libaural2.ClipID
-		// iterate over the clips
-		for id, labelSet := range labelSets {
-			audioClip, err := getAudioClipFromFS(id)
-			if err != nil {
-				logger.Println(err)
-				http.Error(w, "", http.StatusInternalServerError)
-				return
-			}
-			clipTensor, err := tf.NewTensor(string(audioClip[:])) // create a string tensor from the input bytes
-			if err != nil {
-				logger.Println(err)
-				http.Error(w, "", http.StatusInternalServerError)
-				return
-			}
-			result, err := sess.Run(map[tf.Output]*tf.Tensor{bytesPH: clipTensor, sampleRatePH: sampleRateTensor}, []tf.Output{mfccOP}, nil)
-			if err != nil {
-				logger.Println(err)
-				http.Error(w, "", http.StatusInternalServerError)
-				return
-			}
-			shape := result[0].Shape()
-			if shape[0] != int64(libaural2.StridesPerClip) || shape[1] != int64(libaural2.InputSize) {
-				logger.Println(shape, "is not", libaural2.StridesPerClip)
-				http.Error(w, "", http.StatusInternalServerError)
-				return
-			}
-			input := result[0].Value().([][]float32)
-			//input = libaural2.GenFakeInput(labelSet.ToStateIDArray())
-			inputs = append(inputs, input)
-			outputs = append(outputs, labelSet.ToStateIDArray())
-			ids = append(ids, id)
-		}
-		logger.Println(len(inputs), len(outputs))
-		graph, err := tfutils.EmbedTrainingData(inputs, outputs, ids, 8, libaural2.BatchSize) // take 8 sub seqs, and batch size of 10
-		if err != nil {
-			logger.Println(err)
-			http.Error(w, "", http.StatusInternalServerError)
-			return
-		}
-		if _, err = graph.WriteTo(w); err != nil {
-			logger.Println(err)
-		}
 	}
 }
 
@@ -258,7 +177,7 @@ func makeServeIndex(list func() []libaural2.ClipID, vocabPrs map[libaural2.Vocab
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		var indexTemplate = template.Must(template.ParseFiles("templates/index.html"))
+		var indexTemplate = template.Must(template.ParseFiles("webgui/templates/index.html"))
 		ids := list()
 		params := struct {
 			IDs       []libaural2.ClipID
@@ -291,7 +210,7 @@ func makeServeTagUI(vocabPrs map[libaural2.VocabName]bool) func(http.ResponseWri
 			http.Error(w, "", http.StatusBadRequest)
 			return
 		}
-		var uiTemplate = template.Must(template.ParseFiles("templates/tag.html"))
+		var uiTemplate = template.Must(template.ParseFiles("webgui/templates/tag.html"))
 		params := struct {
 			Base32ID      string
 			UrbitSampleID string
@@ -317,7 +236,7 @@ func makeServeVocabUI(vocabPrs map[libaural2.VocabName]bool) func(http.ResponseW
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		var tmpl = template.Must(template.ParseFiles("templates/vocab.html"))
+		var tmpl = template.Must(template.ParseFiles("webgui/templates/vocab.html"))
 		params := struct {
 			VocabName     libaural2.VocabName
 		}{
@@ -333,34 +252,17 @@ func makeServeVocabUI(vocabPrs map[libaural2.VocabName]bool) func(http.ResponseW
 }
 
 
-func makeSampleHandler(putClipID func(libaural2.ClipID) error) func(http.ResponseWriter, *http.Request) {
+func makeSampleHandler(putClipID func(libaural2.ClipID) error, dump func()*libaural2.AudioClip) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rawBytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			logger.Println(err)
-			http.Error(w, "", http.StatusBadRequest)
-			return
-		}
-		if len(rawBytes) != libaural2.AudioClipLen {
-			logger.Println("wrong length")
-			http.Error(w, "wrong length", http.StatusBadRequest)
-			return
-		}
-		var audioClip libaural2.AudioClip
-		copy(audioClip[:], rawBytes) // convert the slice of bytes to an array of bytes.
-		if err != nil {
-			logger.Println(err)
-			http.Error(w, "malformed audio", http.StatusBadRequest)
-			return
-		}
+		audioClip := dump()
 		id := audioClip.ID()
-		logger.Println("putting clipID")
-		if err = putClipID(id); err != nil {
+		logger.Println("putting clip:", id)
+		if err := putClipID(id); err != nil {
 			logger.Println(err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
-		if err = ioutil.WriteFile("audio/"+id.FSsafeString()+".raw", rawBytes, 0644); err != nil {
+		if err := ioutil.WriteFile("audio/"+id.FSsafeString()+".raw", audioClip[:], 0644); err != nil {
 			logger.Println(err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
@@ -388,8 +290,10 @@ type clipToBlob func(*libaural2.AudioClip, libaural2.VocabName) ([]byte, error)
 
 func serve(
 	db boltstore.DB,
-	seqInferenceFuncs map[libaural2.VocabName]func(*tf.Tensor) (*tf.Tensor, error),
+	onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess,
 	namesPrs map[libaural2.VocabName]bool,
+	dumpClip func()*libaural2.AudioClip,
+	tdmMap map[libaural2.VocabName]*trainingDataMaps,
 ) {
 	defer db.Close()
 	makeServeAudioDerivedBlob := makeMakeServeAudioDerivedBlob(namesPrs)
@@ -406,16 +310,28 @@ func serve(
 	if err != nil {
 		logger.Fatalln(err)
 	}
-	renderProbs, err := makeRenderProbs(seqInferenceFuncs)
+	renderProbs, err := makeRenderProbs(onlineSessions)
 	if err != nil {
 		logger.Fatalln(err)
 	}
-	renderArgmaxedStates, err := makeRenderArgmaxedStates(seqInferenceFuncs)
+	renderArgmaxedStates, err := makeRenderArgmaxedStates(onlineSessions)
 	if err != nil {
 		logger.Fatalln(err)
 	}
 	serializeLabelSet := func(labelSet libaural2.LabelSet) (serialized []byte, err error) {
 		serialized, err = labelSet.Serialize()
+		return
+	}
+	putLabelSets := func(labelSet libaural2.LabelSet) (err error){
+		err = db.PutLabelSet(labelSet)
+		if err != nil {
+			return
+		}
+		tdm, prs := tdmMap[labelSet.VocabName]
+		if !prs {
+			err = errors.New("can't find training data map for " + string(labelSet.VocabName))
+		}
+		err = tdm.addClip(labelSet.ID)
 		return
 	}
 	r := mux.NewRouter()
@@ -425,14 +341,13 @@ func serve(
 	r.HandleFunc("/images/probs/{vocab}/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderProbs))
 	r.HandleFunc("/images/argmax/{vocab}/{sampleID}.png", makeServeAudioDerivedBlob(renderArgmaxedStates))
 	r.HandleFunc("/images/labelset/{vocab}/{sampleID}.png", makeServeLabelsSetDerivedBlob(namesPrs, db.GetLabelSet, renderColorLabelSetImage))
-	r.HandleFunc("/audio/{sampleID}.wav", makeServeAudioDerivedBlob(computeWav))
+	r.HandleFunc("/audio/{vocab}/{sampleID}.wav", makeServeAudioDerivedBlob(computeWav))
 	r.HandleFunc("/tagui/{vocab}/{sampleID}", makeServeTagUI(namesPrs))
 	r.HandleFunc("/{vocab}/index", makeServeIndex(db.ListAudioClips, namesPrs))
-	r.HandleFunc("/trainingdata/{vocab}.pb", makeServeTrainingDataGraphdef(db.GetAllLabelSets, namesPrs))
-	r.HandleFunc("/labelsset/{vocab}/{sampleID}", makeWriteLabelsSet(db.PutLabelSet, namesPrs)).Methods("POST")
+	r.HandleFunc("/labelsset/{vocab}/{sampleID}", makeWriteLabelsSet(putLabelSets, namesPrs)).Methods("POST")
 	r.HandleFunc("/labelsset/{vocab}/{sampleID}", makeServeLabelsSetDerivedBlob(namesPrs, db.GetLabelSet, serializeLabelSet)).Methods("GET")
-	r.HandleFunc("/sample/upload", makeSampleHandler(db.PutClipID))
-	fs := http.FileServer(http.Dir("static"))
+	r.HandleFunc("/saveclip", makeSampleHandler(db.PutClipID, dumpClip))
+	fs := http.FileServer(http.Dir("webgui/static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.Handle("/", r)
 	http.ListenAndServe(":48125", nil)

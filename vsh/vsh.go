@@ -14,7 +14,6 @@ import (
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils"
-	"github.ibm.com/Blue-Horizon/aural2/tfutils/lstmutils"
 )
 
 const outputname = "evaluation/softmax/output"
@@ -103,17 +102,16 @@ func uploadClip(clip *libaural2.AudioClip) (err error) {
 }
 
 // Init takes a reader of raw audio, and returns a chan of outputs.
-func Init(reader io.Reader, graphs map[libaural2.VocabName]tf.SavedModel) (result chan map[libaural2.VocabName][]float32, dump func() *libaural2.AudioClip, err error) {
+func Init(
+	reader io.Reader,
+	stepInferenceFuncs map[libaural2.VocabName]func(*tf.Tensor) ([]float32, error),
+) (result chan map[libaural2.VocabName][]float32,
+	dump func() *libaural2.AudioClip,
+	err error,
+) {
 	rb := makeRing()
 	dump = rb.dump
 	result = make(chan map[libaural2.VocabName][]float32)
-	stepInferenceFuncs := map[libaural2.VocabName]func(*tf.Tensor) ([]float32, error){}
-	for vocabName, savedModel := range graphs {
-		stepInferenceFuncs[vocabName], err = lstmutils.MakeStepInference(savedModel)
-		if err != nil {
-			return
-		}
-	}
 	computeMFCC, err := makeComputeMFCCgraph()
 	if err != nil {
 		return
@@ -142,9 +140,7 @@ func Init(reader io.Reader, graphs map[libaural2.VocabName]tf.SavedModel) (resul
 			for vocabName, stepInference := range stepInferenceFuncs {
 				probsMap[vocabName], err = stepInference(mfccTensor)
 				if err != nil {
-					logger.Println(err)
-					close(result)
-					return
+					logger.Fatalln(err)
 				}
 			}
 			result <- probsMap

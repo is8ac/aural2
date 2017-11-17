@@ -1,0 +1,42 @@
+FROM ubuntu:16.04
+
+RUN apt-get update && apt-get install -y curl git build-essential
+
+RUN curl -L \
+"https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz" | \
+tar -C /usr/local -xz
+
+RUN curl -L \
+"https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-cpu-linux-x86_64-1.4.0.tar.gz" | \
+tar -C /usr/local -xz
+
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPATH=/root/go
+
+ENV LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib
+
+# go deps for tf
+RUN go get \
+  github.com/tensorflow/tensorflow/tensorflow/go \
+  github.com/gopherjs/gopherjs \
+  github.com/gopherjs/websocket/websocketjs \
+  honnef.co/go/js/dom \
+  github.com/boltdb/bolt \
+  github.com/faiface/beep \
+  github.com/faiface/beep/wav \
+  github.com/fhs/gompd/mpd \
+  github.com/golang/protobuf/proto \
+  github.com/gorilla/mux \
+  github.com/lucasb-eyer/go-colorful
+
+RUN cd /root/go/src/github.com/tensorflow/tensorflow && git checkout v1.4.0
+
+RUN apt-get install -y libasound2-dev
+
+RUN go get \
+  github.com/hajimehoshi/oto
+
+RUN go get honnef.co/go/js/xhr
+
+RUN apt-get install -y python-pip
+RUN pip install tensorflow

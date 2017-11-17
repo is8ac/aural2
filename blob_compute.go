@@ -7,6 +7,7 @@ import (
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils"
+	"github.ibm.com/Blue-Horizon/aural2/tftrain"
 	"image"
 	"bytes"
 	"image/png"
@@ -15,7 +16,6 @@ import (
 	"strconv"
 )
 
-const modelPath = "../python/models/intent_rnn.pb"
 
 func getAudioClipFromFS(id libaural2.ClipID) (audioClip *libaural2.AudioClip, err error) {
 	rawBytes, err := ioutil.ReadFile("audio/" + id.FSsafeString() + ".raw")
@@ -38,6 +38,7 @@ func makeAddRIFF() (addRIFF clipToBlob, err error) {
 		return
 	}
 	addRIFF = func(audioClip *libaural2.AudioClip, vocabName libaural2.VocabName) ([]byte, error) {
+		logger.Println("adding riff")
 		return append(header, audioClip[:]...), nil
 	}
 	return
@@ -99,7 +100,7 @@ func makeRenderMFCC() (renderMFCC clipToBlob, err error) {
 }
 
 func makeRenderProbs(
-	seqInferenceFuncs map[libaural2.VocabName]func(*tf.Tensor)(*tf.Tensor, error), // takes a map of savedModels,
+	onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess, // takes a map of savedModels,
 	) (
 		renderProbs func(*libaural2.AudioClip, libaural2.VocabName, // returns a func that takes a clip and a vocabName
 			) ([]byte, error),
@@ -114,17 +115,18 @@ func makeRenderProbs(
 		return
 	}
 	renderProbs = func(clip *libaural2.AudioClip, vocabName libaural2.VocabName) (imageBytes []byte, err error) {
-		seqInference, prs := seqInferenceFuncs[vocabName]
+		oSess, prs := onlineSessions[vocabName]
 		if !prs {
-			err = errors.New("don't have seqInferenceFunc for " + string(vocabName))
+			err = errors.New("don't have oSess for " + string(vocabName))
 			return
 		}
 		mfccTensor, err := audioClipToMFCCtensor(clip)
 		if err != nil {
 			return
 		}
-		probs, err := seqInference(mfccTensor)
+		probs, err := oSess.Infer(mfccTensor)
 		if err != nil {
+			logger.Println(err)
 			return
 		}
 		imageBytes, err = probsTensorToImage(probs)
@@ -138,7 +140,7 @@ func makeRenderProbs(
 
 
 func makeRenderArgmaxedStates(
-	seqInferenceFuncs map[libaural2.VocabName]func(*tf.Tensor)(*tf.Tensor, error),
+	onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess,
 	) (
 		renderProbs func(*libaural2.AudioClip, libaural2.VocabName) ([]byte, error),
 		err error,
@@ -148,7 +150,7 @@ func makeRenderArgmaxedStates(
 		return
 	}
 	renderProbs = func(clip *libaural2.AudioClip, vocabName libaural2.VocabName) (imageBytes []byte, err error) {
-		seqInference, prs := seqInferenceFuncs[vocabName]
+		oSess, prs := onlineSessions[vocabName]
 		if !prs {
 			err = errors.New("don't have seqInferenceFunc for " + string(vocabName))
 			return
@@ -158,8 +160,9 @@ func makeRenderArgmaxedStates(
 		if err != nil {
 			return
 		}
-		probsTensor, err := seqInference(mfccTensor)
+		probsTensor, err := oSess.Infer(mfccTensor)
 		if err != nil {
+			logger.Println(err)
 			return
 		}
 		probsList := probsTensor.Value().([][]float32)

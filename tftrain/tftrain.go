@@ -278,8 +278,8 @@ func NewOnlineSess(
 		return
 	}
 	oSess = OnlineSess{
-		graph:        graph,
-		sess:         sess,
+		Graph:        graph,
+		Sess:         sess,
 		trainInputPH: inputsPH.Output(0),
 		inferInputPH: inferInputPH.Output(0),
 		targetPH:     targetsPH.Output(0),
@@ -292,8 +292,8 @@ func NewOnlineSess(
 
 // OnlineSess stores a model in the process of training.
 type OnlineSess struct {
-	graph        *tf.Graph
-	sess         *tf.Session
+	Graph        *tf.Graph
+	Sess         *tf.Session
 	trainInputPH tf.Output
 	inferInputPH tf.Output
 	targetPH     tf.Output
@@ -304,7 +304,7 @@ type OnlineSess struct {
 
 // Train trains one mini batch
 func (oSess OnlineSess) Train(inputTensor *tf.Tensor, targetTensor *tf.Tensor) (loss float32, err error) {
-	results, err := oSess.sess.Run(
+	results, err := oSess.Sess.Run(
 		map[tf.Output]*tf.Tensor{oSess.trainInputPH: inputTensor, oSess.targetPH: targetTensor},
 		[]tf.Output{oSess.loss},
 		[]*tf.Operation{oSess.trainOP},
@@ -318,7 +318,7 @@ func (oSess OnlineSess) Train(inputTensor *tf.Tensor, targetTensor *tf.Tensor) (
 
 // Infer runs the graph
 func (oSess OnlineSess) Infer(inputTensor *tf.Tensor) (outputTensor *tf.Tensor, err error) {
-	results, err := oSess.sess.Run(
+	results, err := oSess.Sess.Run(
 		map[tf.Output]*tf.Tensor{oSess.inferInputPH: inputTensor},
 		[]tf.Output{oSess.output},
 		nil,
@@ -332,6 +332,6 @@ func (oSess OnlineSess) Infer(inputTensor *tf.Tensor) (outputTensor *tf.Tensor, 
 
 // Run the graph. Just a wrapper around tf.Session.Run() For simple cases you probably want .Infer()
 func (oSess OnlineSess) Run(feeds map[tf.Output]*tf.Tensor, fetches []tf.Output) (results []*tf.Tensor, err error) {
-	results, err = oSess.sess.Run(feeds, fetches, nil)
+	results, err = oSess.Sess.Run(feeds, fetches, nil)
 	return
 }

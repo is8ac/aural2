@@ -12,7 +12,7 @@ import (
 
 	"github.com/lucasb-eyer/go-colorful"
 
-	"github.ibm.com/ifleonar/mu/urbitname"
+	"github.ibm.com/Blue-Horizon/aural2/urbitname"
 )
 
 // Duration of audio clip in seconds
