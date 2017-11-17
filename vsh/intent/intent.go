@@ -22,6 +22,7 @@ var Vocabulary = libaural2.Vocabulary{
 		DoIt:           "DoIt",
 		DontDoIt:       "Don'tDoIt",
 		UploadClip:     "UploadClip",
+		ShutDown:       "ShutDown",
 	},
 	Hue: map[libaural2.State]float64{
 		Nil: 0,
@@ -40,6 +41,7 @@ var Vocabulary = libaural2.Vocabulary{
 		"y": DoIt,
 		"o": DontDoIt,
 		"u": UploadClip,
+		"d": ShutDown,
 	},
 }
 
@@ -58,20 +60,5 @@ const (
 	DoIt       // the user agrees with the proposed action
 	DontDoIt   // Don't do whatever it was that you asked the user if you could do.
 	UploadClip // Upload the last 10 seconds of audio.
+	ShutDown
 )
-
-var names = map[libaural2.State]string{
-	Nil:            "Nil",
-	PlayMusic:      "PlayMusic",
-	PauseMusic:     "PauseMusic",
-	SkipSong:       "SkipSong",
-	SayTime:        "SayTime",
-	SayVersion:     "SayVersion",
-	SayTemperature: "SayTemperature",
-	SayAirQuality:  "SayAirQuality",
-	TurnOff:        "TurnOff",
-	EasterEgg:      "EasterEgg",
-	DoIt:           "DoIt",
-	DontDoIt:       "Don'tDoIt",
-	UploadClip:     "UploadClip",
-}

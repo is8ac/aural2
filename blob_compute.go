@@ -7,16 +7,15 @@ import (
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils"
+	"github.ibm.com/Blue-Horizon/aural2/tftrain"
 	"image"
 	"bytes"
 	"image/png"
-	"github.ibm.com/Blue-Horizon/aural2/tfutils/lstmutils"
 	"io/ioutil"
 	"github.com/lucasb-eyer/go-colorful"
 	"strconv"
 )
 
-const modelPath = "../python/models/intent_rnn.pb"
 
 func getAudioClipFromFS(id libaural2.ClipID) (audioClip *libaural2.AudioClip, err error) {
 	rawBytes, err := ioutil.ReadFile("audio/" + id.FSsafeString() + ".raw")
@@ -32,19 +31,20 @@ func getAudioClipFromFS(id libaural2.ClipID) (audioClip *libaural2.AudioClip, er
 	return
 }
 
-func makeAddRIFF() (addRIFF func(*libaural2.AudioClip) ([]byte, error), err error) {
+func makeAddRIFF() (addRIFF clipToBlob, err error) {
 	headerString := "5249464624e2040057415645666d74201000000001000100803e0000007d0000020010006461746100e20400"
 	header, err := hex.DecodeString(headerString)
 	if err != nil {
 		return
 	}
-	addRIFF = func(audioClip *libaural2.AudioClip) ([]byte, error) {
+	addRIFF = func(audioClip *libaural2.AudioClip, vocabName libaural2.VocabName) ([]byte, error) {
+		logger.Println("adding riff")
 		return append(header, audioClip[:]...), nil
 	}
 	return
 }
 
-func makeRenderSpectrogram() (renderSpectrogram func(*libaural2.AudioClip) ([]byte, error), err error) {
+func makeRenderSpectrogram() (renderSpectrogram clipToBlob, err error) {
 	s := op.NewScope()
 	bytesPH, pcm := tfutils.ParseRawBytesToPCM(s)
 	specgramOP := tfutils.ComputeSpectrogram(s.SubScope("spectrogram"), pcm, 0, 0)
@@ -55,7 +55,7 @@ func makeRenderSpectrogram() (renderSpectrogram func(*libaural2.AudioClip) ([]by
 		return
 	}
 
-	renderSpectrogram = func(raw *libaural2.AudioClip) (imageBytes []byte, err error) {
+	renderSpectrogram = func(raw *libaural2.AudioClip, vocabName libaural2.VocabName) (imageBytes []byte, err error) {
 		if raw == nil {
 			err = errors.New("raw is nil")
 			return
@@ -70,7 +70,7 @@ func makeRenderSpectrogram() (renderSpectrogram func(*libaural2.AudioClip) ([]by
 	return
 }
 
-func makeRenderMFCC() (renderMFCC func(*libaural2.AudioClip) ([]byte, error), err error) {
+func makeRenderMFCC() (renderMFCC clipToBlob, err error) {
 	s := op.NewScope()
 	bytesPH, pcm := tfutils.ParseRawBytesToPCM(s)
 	mfccOP, sampleRatePH := tfutils.ComputeMFCC(s.SubScope("spectrogram"), pcm)
@@ -84,7 +84,7 @@ func makeRenderMFCC() (renderMFCC func(*libaural2.AudioClip) ([]byte, error), er
 	if err != nil {
 		return
 	}
-	renderMFCC = func(raw *libaural2.AudioClip) (imageBytes []byte, err error) {
+	renderMFCC = func(raw *libaural2.AudioClip, vocabName libaural2.VocabName) (imageBytes []byte, err error) {
 		if raw == nil {
 			err = errors.New("raw is nil")
 			return
@@ -99,16 +99,14 @@ func makeRenderMFCC() (renderMFCC func(*libaural2.AudioClip) ([]byte, error), er
 	return
 }
 
-func makeRenderProbs() (renderProbs func(*libaural2.AudioClip) ([]byte, error), err error) {
-	graphBytes, err := ioutil.ReadFile(modelPath)
-	if err != nil {
-		return
-	}
+func makeRenderProbs(
+	onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess, // takes a map of savedModels,
+	) (
+		renderProbs func(*libaural2.AudioClip, libaural2.VocabName, // returns a func that takes a clip and a vocabName
+			) ([]byte, error),
+			err error,
+			) {
 	audioClipToMFCCtensor, err := tfutils.MakeAudioClipToMFCCtensor()
-	if err != nil {
-		return
-	}
-	seqInference, err := lstmutils.MakeSeqInference(graphBytes)
 	if err != nil {
 		return
 	}
@@ -116,13 +114,19 @@ func makeRenderProbs() (renderProbs func(*libaural2.AudioClip) ([]byte, error), 
 	if err != nil {
 		return
 	}
-	renderProbs = func(clip *libaural2.AudioClip) (imageBytes []byte, err error) {
+	renderProbs = func(clip *libaural2.AudioClip, vocabName libaural2.VocabName) (imageBytes []byte, err error) {
+		oSess, prs := onlineSessions[vocabName]
+		if !prs {
+			err = errors.New("don't have oSess for " + string(vocabName))
+			return
+		}
 		mfccTensor, err := audioClipToMFCCtensor(clip)
 		if err != nil {
 			return
 		}
-		probs, err := seqInference(mfccTensor)
+		probs, err := oSess.Infer(mfccTensor)
 		if err != nil {
+			logger.Println(err)
 			return
 		}
 		imageBytes, err = probsTensorToImage(probs)
@@ -135,26 +139,30 @@ func makeRenderProbs() (renderProbs func(*libaural2.AudioClip) ([]byte, error), 
 }
 
 
-func makeRenderArgmaxedStates() (renderProbs func(*libaural2.AudioClip) ([]byte, error), err error) {
-	graphBytes, err := ioutil.ReadFile(modelPath)
-	if err != nil {
-		return
-	}
+func makeRenderArgmaxedStates(
+	onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess,
+	) (
+		renderProbs func(*libaural2.AudioClip, libaural2.VocabName) ([]byte, error),
+		err error,
+		) {
 	audioClipToMFCCtensor, err := tfutils.MakeAudioClipToMFCCtensor()
 	if err != nil {
 		return
 	}
-	seqInference, err := lstmutils.MakeSeqInference(graphBytes)
-	if err != nil {
-		return
-	}
-	renderProbs = func(clip *libaural2.AudioClip) (imageBytes []byte, err error) {
+	renderProbs = func(clip *libaural2.AudioClip, vocabName libaural2.VocabName) (imageBytes []byte, err error) {
+		oSess, prs := onlineSessions[vocabName]
+		if !prs {
+			err = errors.New("don't have seqInferenceFunc for " + string(vocabName))
+			return
+		}
+
 		mfccTensor, err := audioClipToMFCCtensor(clip)
 		if err != nil {
 			return
 		}
-		probsTensor, err := seqInference(mfccTensor)
+		probsTensor, err := oSess.Infer(mfccTensor)
 		if err != nil {
+			logger.Println(err)
 			return
 		}
 		probsList := probsTensor.Value().([][]float32)

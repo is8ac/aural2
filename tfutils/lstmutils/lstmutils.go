@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 
+	"github.ibm.com/Blue-Horizon/aural2/tftrain"
+
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 )
 
@@ -15,17 +17,7 @@ const outputname = "/softmax/output"
 const inputname = "/inputs"
 
 // LoadGraph loads the TF graph from the bytes of an LSTM graphdef, and returns a
-func LoadGraph(graphDefBytes []byte, scopeName string) (session *tf.Session, input, output tf.Output, statePlaceholders, stateFetches []tf.Output, stateFeeds map[tf.Output]*tf.Tensor, err error) {
-	graph := tf.NewGraph() // make a new graph,
-	// and import the graphdef into it.
-	if err = graph.Import(graphDefBytes, ""); err != nil {
-		logger.Println(err)
-		return
-	} // Do we still have a nil graph?
-	if graph == nil {
-		err = errors.New("graph is nil")
-		return
-	}
+func LoadGraph(graph *tf.Graph, sess *tf.Session, scopeName string) (input, output tf.Output, statePlaceholders, stateFetches []tf.Output, stateFeeds map[tf.Output]*tf.Tensor, err error) {
 	// read in the two lists of state OP names
 	initialStateNames, finalStateNames, err := readStateNames(graph, scopeName)
 	if err != nil {
@@ -35,21 +27,15 @@ func LoadGraph(graphDefBytes []byte, scopeName string) (session *tf.Session, inp
 	stateFeeds = make(map[tf.Output]*tf.Tensor)                   // feeds is the map of placeholders to the tensors of initial state that should be fed into them.
 	stateFetches = make([]tf.Output, len(finalStateNames))        // fetches are the outputs we pull on to get the tensors of final state.
 	statePlaceholders = make([]tf.Output, len(initialStateNames)) // placeholders is a list of input placeholders. It contains the same elements as stateFeeds, but is needed becouse maps do not have a stable ordering.
-	// Create a session for inference over graph.
-	session, err = tf.NewSession(graph, nil)
-	if err != nil {
-		logger.Println(err)
-		return
-	}
 
 	// zerosOP is an OP that returns a tensor of zeros of shape [1, `n`] where `n` is the size of the LSTM state.
 	zerosOP := graph.Operation("zeros")
 	if zerosOP == nil {
-		logger.Println(err)
+		err = errors.New("can't find zeros op")
 		return
 	}
 	// pull on the OP to get the zerosTensor
-	result, err := session.Run(map[tf.Output]*tf.Tensor{}, []tf.Output{zerosOP.Output(0)}, nil)
+	result, err := sess.Run(map[tf.Output]*tf.Tensor{}, []tf.Output{zerosOP.Output(0)}, nil)
 	if err != nil {
 		logger.Println(err)
 		return
@@ -128,13 +114,13 @@ func readStateNames(graph *tf.Graph, scopeName string) (initialStateNames, final
 }
 
 // MakeSeqInference returns a function that takes an output of a slice of mfccs of one clip, and returns a [][]float32 labels.
-func MakeSeqInference(graphBytes []byte) (seqInference func(*tf.Tensor) (*tf.Tensor, error), err error) {
-	sess, input, output, _, _, _, err := LoadGraph(graphBytes, "seq_inference")
+func MakeSeqInference(savedModel tf.SavedModel) (seqInference func(*tf.Tensor) (*tf.Tensor, error), err error) {
+	input, output, _, _, _, err := LoadGraph(savedModel.Graph, savedModel.Session, "seq_inference")
 	if err != nil {
 		return
 	}
 	seqInference = func(mfccs *tf.Tensor) (probs *tf.Tensor, err error) {
-		results, err := sess.Run(map[tf.Output]*tf.Tensor{input: mfccs}, []tf.Output{output}, nil)
+		results, err := savedModel.Session.Run(map[tf.Output]*tf.Tensor{input: mfccs}, []tf.Output{output}, nil)
 		if err != nil {
 			return
 		}
@@ -145,15 +131,15 @@ func MakeSeqInference(graphBytes []byte) (seqInference func(*tf.Tensor) (*tf.Ten
 }
 
 // MakeStepInference returns a function that takes an output of a slice of mfccs of one clip, and returns a [][]float32 labels.
-func MakeStepInference(graphBytes []byte) (stepInference func(*tf.Tensor) ([]float32, error), err error) {
-	sess, input, output, placeholders, fetches, feeds, err := LoadGraph(graphBytes, "step_inference")
+func MakeStepInference(oSession tftrain.OnlineSess) (stepInference func(*tf.Tensor) ([]float32, error), err error) {
+	input, output, placeholders, fetches, feeds, err := LoadGraph(oSession.Graph, oSession.Sess, "step_inference")
 	if err != nil {
 		return
 	}
 	fetches = append(fetches, output) // also pull on output
 	stepInference = func(mfccTensor *tf.Tensor) (probs []float32, err error) {
 		feeds[input] = mfccTensor // feed the input
-		results, err := sess.Run(
+		results, err := oSession.Sess.Run(
 			feeds,
 			fetches,
 			nil,

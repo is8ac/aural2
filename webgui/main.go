@@ -99,11 +99,26 @@ func getLabelsSet() {
 	return
 }
 
+func reloadProbs() {
+	d := dom.GetWindow().Document()
+	probs := d.GetElementByID("probs").(*dom.HTMLImageElement)
+	probsSrc := probs.Src
+	argmax := d.GetElementByID("argmax").(*dom.HTMLImageElement)
+	argmaxSrc := argmax.Src
+	for {
+		time.Sleep(500 * time.Millisecond)
+		probs.Set("src", probsSrc+"?"+time.Now().String())
+		argmax.Set("src", argmaxSrc+"?"+time.Now().String())
+		print("loading")
+	}
+}
+
 var clipID la.ClipID
 var vocab *la.Vocabulary
 var labelsSet la.LabelSet
 
 func start() {
+	go reloadProbs()
 	var err error
 	serialisedData := dom.GetWindow().Document().GetElementByID("data").(*dom.HTMLDivElement).Dataset()
 	clipIDbytes, err := base32.StdEncoding.DecodeString(serialisedData["b32sampleid"])
@@ -164,21 +179,23 @@ func start() {
 	})
 	w.AddEventListener("keydown", false, func(event dom.Event) {
 		ke := event.(*dom.KeyboardEvent)
-		state, prs := vocab.KeyMapping[ke.Key]
-		if prs {
-			if ke.Key != currentlyDepressedKey {
-				currentlyDepressedKey = ke.Key
-				label := la.Label{
-					State: state,
-					Start: audio.Get("currentTime").Float(),
+		if !ke.AltKey {
+			state, prs := vocab.KeyMapping[ke.Key]
+			if prs {
+				if ke.Key != currentlyDepressedKey {
+					currentlyDepressedKey = ke.Key
+					label := la.Label{
+						State: state,
+						Start: audio.Get("currentTime").Float(),
+					}
+					curLabel = label
+					setEnd = createLabelMarker(curLabel)
 				}
-				curLabel = label
-				setEnd = createLabelMarker(curLabel)
 			}
 		}
-		//if ke.Key == "s" {
-		//	go postLabelsSet(labelsSet)
-		//}
+		if ke.Key == "s" && ke.AltKey {
+			go postLabelsSet(labelsSet)
+		}
 		if ke.Key == "Delete" {
 			labelsSet.Labels = []la.Label{}
 			labelsElm := d.GetElementByID("labels").(*dom.HTMLDivElement)
@@ -208,6 +225,7 @@ func start() {
 		}
 		if ke.Key == " " {
 			if audio.Paused {
+				print("playing")
 				audio.Play()
 			} else {
 				audio.Pause()
@@ -217,7 +235,7 @@ func start() {
 }
 
 func main() {
-	fmt.Println("Audio vis GUI version 0.1.2")
+	fmt.Println("Audio vis GUI version 0.1.3")
 	w := dom.GetWindow()
 	w.AddEventListener("DOMContentLoaded", true, func(event dom.Event) {
 		go start()

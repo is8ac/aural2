@@ -1,0 +1,27 @@
+FROM ubuntu:16.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  tar \
+  ncdu \
+  curl \
+  libasound2 \
+  alsa-utils
+
+RUN curl -L \
+  "https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-cpu-linux-x86_64-1.4.0.tar.gz" | \
+  tar -C /usr/local -xz
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+COPY webgui/static /webgui/static
+COPY webgui/templates /webgui/templates
+COPY target/aural2 /bin/aural2
+COPY target/main.js /webgui/static/main.js
+COPY target/train_graph.pb target/train_graph.pb
+COPY run.sh /run.sh
+RUN mkdir /audio
+
+EXPOSE 48125
+
+CMD ["bash", "/run.sh"]

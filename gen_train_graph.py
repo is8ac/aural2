@@ -1,9 +1,96 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+
+import argparse
+import codecs
+import json
 import logging
-import time
+import os
+import shutil
+import sys
+from tensorflow.python.framework import graph_util
 import numpy as np
+from six import iteritems
+import time
 import tensorflow as tf
+
+
+def main():
+    params = {
+            "batch_size": 7,
+            "dropout": 0.0,
+            "embedding_size": 0,
+            "hidden_size": 256,
+            "input_dropout": 0.0,
+            "input_size": 13,
+            "learning_rate": 0.0005,
+            "max_grad_norm": 5.0,
+            "num_layers": 2,
+            "num_unrollings": 100,
+            "full_seq_len": 312,
+            "output_size": 50,
+            }
+
+    # Create graphs
+    print('Creating graph')
+    graph = tf.Graph()
+    with graph.as_default():
+        # make graphs for training
+        with tf.name_scope('training'):
+            train_model = CharRNN(params, is_training=True, use_batch=True, seq_len=params['num_unrollings'])
+        tf.get_variable_scope().reuse_variables()
+        # make graph for doing inference one mfcc at a time.
+        with tf.name_scope('step_inference'):
+            step_inference_model = CharRNN(params, is_training=False, use_batch=False, seq_len=1)
+            initialStateNames = []
+            finalStateNames = []
+            for i in step_inference_model.initial_state:
+                initialStateNames.append(i.c.op.name)
+                initialStateNames.append(i.h.op.name)
+            for i in step_inference_model.final_state:
+                finalStateNames.append(i.c.op.name)
+                finalStateNames.append(i.h.op.name)
+            step_initialStateConst = tf.constant(initialStateNames, name="initial_state_names")
+            step_finalStateNamesConst = tf.constant(finalStateNames, name="final_state_names")
+
+        # make graph for doing inference on a full length sequence
+        with tf.name_scope('seq_inference'):
+            seq_inference_model = CharRNN(params, is_training=False, use_batch=False, seq_len=params['full_seq_len'])
+            initialStateNames = []
+            finalStateNames = []
+            for i in seq_inference_model.initial_state:
+                initialStateNames.append(i.c.op.name)
+                initialStateNames.append(i.h.op.name)
+            for i in seq_inference_model.final_state:
+                finalStateNames.append(i.c.op.name)
+                finalStateNames.append(i.h.op.name)
+            seq_initialStateConst = tf.constant(initialStateNames, name="initial_state_names")
+            seq_finalStateNamesConst = tf.constant(finalStateNames, name="final_state_names")
+
+
+
+
+    with tf.Session(graph=graph) as session:
+
+        init = tf.global_variables_initializer()
+        print("init.name", init.name)
+        #session.run(init)
+        print(train_model.average_loss.op.name)
+        #print(train_model.final_state.name)
+        print(train_model.train_op.name)
+        print(train_model.summaries.name)
+        print(train_model.global_step.name)
+        print(train_model.learning_rate.name)
+        print(train_model.ppl.name)
+        print(train_model.input_data.name)
+        print(train_model.targets.name)
+        print(train_model.reset_loss_monitor.name)
+        #print(train_model.initial_state.name)
+
+        zeros = tf.zeros([1, params['hidden_size']], dtype=tf.float32, name="zeros")
+        tf.train.write_graph(tf.get_default_graph().as_graph_def(), 'target', 'train_graph.pb', as_text=False)
+
+
 
 # Disable Tensorflow logging messages.
 logging.getLogger('tensorflow').setLevel(logging.WARNING)
@@ -111,7 +198,7 @@ class CharRNN(object):
                                           count.assign(count + 1),
                                           name='update_loss_monitor')
       with tf.control_dependencies([self.update_loss_monitor]):
-        self.average_loss = sum_mean_loss / count
+        self.average_loss = tf.div(sum_mean_loss, count, name="div")
         self.ppl = tf.exp(self.average_loss)
 
       # Monitor the loss.
@@ -173,3 +260,8 @@ def create_tuple_placeholders(dtype, extra_dims, shape):
     else:
       result = t(*subplaceholders)
   return result
+
+
+
+if __name__ == '__main__':
+    main()

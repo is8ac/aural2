@@ -7,12 +7,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils"
-	"github.ibm.com/Blue-Horizon/aural2/tfutils/lstmutils"
 )
 
 const outputname = "evaluation/softmax/output"
@@ -101,17 +102,16 @@ func uploadClip(clip *libaural2.AudioClip) (err error) {
 }
 
 // Init takes a reader of raw audio, and returns a chan of outputs.
-func Init(reader io.Reader, graphs map[libaural2.VocabName][]byte) (result chan map[libaural2.VocabName][]float32, dump func() *libaural2.AudioClip, err error) {
+func Init(
+	reader io.Reader,
+	stepInferenceFuncs map[libaural2.VocabName]func(*tf.Tensor) ([]float32, error),
+) (result chan map[libaural2.VocabName][]float32,
+	dump func() *libaural2.AudioClip,
+	err error,
+) {
 	rb := makeRing()
 	dump = rb.dump
 	result = make(chan map[libaural2.VocabName][]float32)
-	stepInferenceFuncs := map[libaural2.VocabName]func(*tf.Tensor) ([]float32, error){}
-	for vocabName, graphBytes := range graphs {
-		stepInferenceFuncs[vocabName], err = lstmutils.MakeStepInference(graphBytes)
-		if err != nil {
-			return
-		}
-	}
 	computeMFCC, err := makeComputeMFCCgraph()
 	if err != nil {
 		return
@@ -140,9 +140,7 @@ func Init(reader io.Reader, graphs map[libaural2.VocabName][]byte) (result chan 
 			for vocabName, stepInference := range stepInferenceFuncs {
 				probsMap[vocabName], err = stepInference(mfccTensor)
 				if err != nil {
-					logger.Println(err)
-					close(result)
-					return
+					logger.Fatalln(err)
 				}
 			}
 			result <- probsMap
@@ -150,4 +148,88 @@ func Init(reader io.Reader, graphs map[libaural2.VocabName][]byte) (result chan 
 		close(result)
 	}()
 	return
+}
+
+// MakeDefaultAction wraps a func() in an Action with sane defaults.
+func MakeDefaultAction(run func()) (action Action) {
+	action = Action{
+		MinActivationProb: 0.9, // To decrease false positives, increase. To decrease false negatives, lower.
+		MaxResetProb:      0.2, // To decrease duplicate calls, lower.
+		HandlerFunction: func(prob float32) {
+			run()
+		},
+	}
+	return
+}
+
+// Action is something that can be done in response a state
+type Action struct {
+	MinActivationProb float32            // don't active when prob is low.
+	MaxResetProb      float32            // How low does the prob need to be for the utterance to have ended?
+	CoolDownDuration  time.Duration      // how long after the utterance can a new utterance start?
+	TimeLastCalled    time.Time          // when was the handlerFunc last called?
+	ended             bool               // false if still in word, true if not continued.
+	HandlerFunction   func(prob float32) // the func to be called when activated.
+}
+
+func (action *Action) run(prob float32, name string) {
+	if prob > action.MinActivationProb && // if prob is high,
+		action.TimeLastCalled.Add(action.CoolDownDuration).Before(time.Now()) && // and it's not too soon
+		action.ended { // and the action is ended
+		action.ended = false
+		action.TimeLastCalled = time.Now()
+		go action.HandlerFunction(prob)
+	}
+	if prob < action.MaxResetProb && !action.ended {
+		action.ended = true
+	}
+}
+
+type actionKey struct {
+	VocabName libaural2.VocabName
+	State     libaural2.State
+	Name      string
+}
+
+// EventBroker manages the stream of events.
+type EventBroker struct {
+	mutex    sync.Mutex
+	handlers map[actionKey]*Action
+}
+
+// NewEventBroker makes a new event broker from a chan of results
+func NewEventBroker(resultsChan chan map[libaural2.VocabName][]float32) (eb EventBroker) {
+	eb = EventBroker{
+		mutex:    sync.Mutex{},
+		handlers: map[actionKey]*Action{},
+	}
+	go func() {
+		for results := range resultsChan {
+			eb.Handle(results)
+		}
+	}()
+	return
+}
+
+// Register a function to be called
+func (eb *EventBroker) Register(vocab libaural2.VocabName, state libaural2.State, name string, action Action) {
+	eb.mutex.Lock()
+	defer eb.mutex.Unlock()
+	eb.handlers[actionKey{VocabName: vocab, State: state, Name: name}] = &action
+}
+
+// Unregister the handler
+func (eb *EventBroker) Unregister(vocab libaural2.VocabName, state libaural2.State, name string) {
+	eb.mutex.Lock()
+	defer eb.mutex.Unlock()
+	delete(eb.handlers, actionKey{VocabName: vocab, State: state, Name: name})
+}
+
+// Handle takes one result and passes it on to the actions
+func (eb *EventBroker) Handle(results map[libaural2.VocabName][]float32) {
+	eb.mutex.Lock()
+	defer eb.mutex.Unlock()
+	for key, action := range eb.handlers {
+		go action.run(results[key.VocabName][key.State], key.Name)
+	}
 }
