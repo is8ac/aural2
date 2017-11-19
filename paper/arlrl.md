@@ -4,26 +4,25 @@
 Knowing what humans want is a differential and important problem.
 Traditionally, training such systems requires significant quantities of manually annotated data.
 Obtaining this data is difficult.
-We describe arlRL, a system which, purely by interacting with a human user via voice, can learn to detect when the user thinks arlRL has taken the wrong action, and using this information, learns to predict the degree to which an action will displease the user.
-ArlRL achieves this with no initial information regarding the detection on emotions in humans, or of the happiness likely to be caused by any actions.
+We describe arlRL, a system which, purely by interacting with a human user via voice, can learn to detect when the user thinks arlRL has taken the wrong action, and, using this information, learns to predict the degree to which an action will displease the user.
+ArlRL achieves this with no initial information regarding the detection of emotions in humans, or of the happiness likely to be caused by any actions.
 Furthermore, it uses a single model for both classification of reward, and of right action, while avoiding wireheading.
 
 
 ## Introduction
-It is generally desirable that machines should take actions which are good.
-Let us assume that performing a good action will cause the user to be happy, and/or that an action is good to the extent that it makes the user happy.
-Therefore, the user being happy is evidence that the past actions were good, and the user being unhappy is evidence that the past actions were bad.
-If we can measure the happiness of the user, we can use standard supervised learning to predict it.
-As the most good action is the action which will cause the greatest happiness, we can use such a model to choose the best action.
+It is generally desirable that machines should take actions which the user likes.
+We assume that if the machine takes an wrong action, the user will be displeased regarding the action.
+Therefore, the user being displeased regarding an action is evidence that it was not a good action.
+If we can measure the displeasure of the user, we can use standard supervised learning to predict it.
+As the best action is the action which will cause the least displeasure, we can use such a model to choose the best action.
+To be more precise, arlRL avoids taking actions which it predicts will cause the user to be displeased.
 
-To be more precise, arlRL tries to avoid taking actions which will cause the user to be displeased at the action.
+Detecting that the user is displeased as a result of an action is nontrivial.
 
-However detecting that the user is displeased as a result of the action is nontrivial.
-
-Let us temporally set this problem aside while I describe a further complication.
+However let us temporally set this problem aside while I describe a further complication.
 
 The goodness of an action is not fixed, but rather changes with the environment state.
-There are times when turning on the lights makes the user happy, but once the lights are on, turning on the lights again will not make the user any happier.
+There are times when turning on the lights makes the user happy, but once the lights are on, turning on them on again will not make the user any happier.
 If the user wishes to sleep, turning on the light even once will cause the user to be unhappy.
 When interacting with humans, the correct behavior of a machine is dependent on the state of the environment, particularly the internal state of the human user.
 It is expensive and impractical to directly observer a humans internal state.
@@ -41,12 +40,12 @@ Happiness, like wanting the lights to be on, is just another aspect of a humans 
 Information about the users happiness leeks out and is observable.
 We must therefore learn to classify the user happiness.
 
-Let us a assume that humans know how happy they are.
+Let us assume that humans know how happy they are.
 Image that arlRL detects an state of the world which it thinks is indicative of user unhappiness, and then says to the user "I apologize for the mistake."
 If the user was unhappy as a consequence of an action which arlRL had previously taken, the user will be somewhat happier that arlRL at least apologize.
 If on the other hand, arlRL had made no mistake, the user will be unhappy that arlRL is pointlessly apologizing.
 
-In other words, if apologizing makes the user happier, arlRL made a mistake previously.
+In other words, if apologizing will make the user happier, arlRL made a mistake previously.
 If we treat apologizing as another action whose goodness is predicted just as the goodness of turning the lights on is predicted, we can use it as a proxy for user unhappiness.
 
 If arlRL predicts that taking apologize action will increase user happiness, the user is probably unhappy, and arlRL must have done something wrong.

@@ -1,5 +1,12 @@
-render:
-	pandoc -t latex -o world_state.pdf arlrl_paper.md
+arlrl:
+	pandoc -t latex -o arlrl.pdf arlrl.md
 
-loop: render
-	while inotifywait -e close_write arlrl_paper.md; do pandoc -t latex -o world_state.pdf arlrl_paper.md; done
+arlrl_loop:
+	while inotifywait -e close_write arlrl.md; do make aural2; done
+
+
+aural2:
+	pandoc -t latex -o aural2.pdf aural2.md
+
+aural2_loop:
+	while inotifywait -e close_write aural2.md; do make aural2; done
