@@ -1,4 +1,4 @@
-# Learning to understand humans using in-band, initially unknown, reward signals
+# Learning to understand humans: Exploiting human nature to learn in-band negative reward signals and/or minimizing human frustration when requesting boolean feedback
 
 ## Abstract
 Knowing what humans want is a differential and important problem.

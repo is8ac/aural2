@@ -1,8 +1,12 @@
+all: arlrl aural2
+
+all_loop: arlrl_loop aural2_loop
+
 arlrl:
 	pandoc -t latex -o arlrl.pdf arlrl.md
 
 arlrl_loop:
-	while inotifywait -e close_write arlrl.md; do make aural2; done
+	while inotifywait -e close_write arlrl.md; do make arlrl; done
 
 
 aural2:
