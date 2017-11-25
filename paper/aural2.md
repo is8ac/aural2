@@ -9,18 +9,11 @@ Furthermore, Aural2 will automatically learn to integrate past context into its 
 
 We describe the architecture of Aural2, its failings, and future directions for development.
 
-
 # Introduction
-Most natural language parsing systems operate at the level of words.
-Given a string of words, they return the action which the user wishes to be performed.
-To pass raw speech to such a system, it must first be transcribed into a series of words.
-Such a series of words contains less information then the original audio.
-Therefore, purely on information theoretic grounds, we should expect word level NLP on top of speech to text (STT), to be less accurate then a system which transforms sound directly into intents.
-
-However, this improvement in accuracy comes with a significantly cost to Aural2s ability to scale to large vocabularies.
-
-Aural2 contains multiple vocabularies, one for intents, another for words, etc.
-However this paper will primarily focus on the intent vocabulary.
+It is useful for users to be able to control machines via voice.
+To do this, the machine must be able to turn sound into one of the finite number of actions which the machine is capable of performing.
+Most voice command systems use word level natural language parsing (NLP) systems operating on top of speech to text.
+As a series of words contains less information then the audio it was transcribed from, we should, in theory, expect word level NLP on top of speech to text (STT) to be less accurate then a system which transforms sound directly into intents.
 
 # Technologies used
 ## TensorFlow compute graph (TF graph)
@@ -120,6 +113,8 @@ The weight and bias variables are updated by the training graph, and the accurac
 The variables stay on the GPU, or whatever compute device TensorFlow has decided to use,  and need never leave.
 TensorFlow transparently handles locking to ensure that the various graphs can read and write to the shared memory safely.
 
+# Unscientific impractical observations
+Given 30 seconds of audio, aural2 is able to learn recognize simple commands with ~90% accuracy.
 
 # Shortcomings
 Although perhaps superior to existing technology in latency, simplicity, and speed of training, aural2 is inherently of limited scalability, and as such, can have no ambition for use in full vocabulary natural language parsing.
