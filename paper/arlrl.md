@@ -1,7 +1,13 @@
-# Learning to understand humans by exploiting human nature to learn in-band negative reward signals
+# Learning what people want by exploiting human nature to learn in-band negative reward signals
 
 ## Abstract
-Knowing what humans want is a differential and important problem.
+At any moment, there are numerous action which a machine may take.
+Some of these actions are good, others are bad.
+We would like our machines to take good actions and not to take bad ones.
+The goodness of an action is not fixed, it is dependent on the state of the environment.
+We wish to have a function that takes a environment state and an action and returns an expected reward.
+
+Knowing what action to take humans want is a differential and important problem.
 Traditionally, training such systems requires significant quantities of manually annotated data.
 Obtaining this data is difficult.
 We describe arlRL, a system which, purely by interacting with a human user via voice or other methods, can learn to detect when the user thinks arlRL has taken the wrong action, and, using this information, learns to predict the degree to which an action will displease the user.
