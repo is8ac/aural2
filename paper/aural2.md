@@ -21,7 +21,7 @@ TF Compute Graph is a purely functional language for defining graphs of transfor
 Each node in the graph takes zero or more tensors as input, and returns one or more tensors as output.
 As recursion and loops are forbidden, TF compute graphs are provably halting, execute in approximately fixed time, and are not Turing complete.
 A TF graph can be stored as a GraphDef protobuf file.
-This GraphDef is cross platform, able to be evaluated by the TensorFlow runtime on any sported hardware, whether that be an x86 or ARM CPU, or NVIDIA GPU.
+This GraphDef is cross platform, able to be evaluated by the TensorFlow runtime on any supported hardware, whether that be an x86 or ARM CPU, or NVIDIA GPU.
 
 Although, it is possible to write a text encoded GraphDef by hand, it is far more common to construct the graph using some more general purpose language such as python or golang, either for export as a GraphDef for later use, or for immediate evaluation.
 
@@ -47,7 +47,7 @@ A single cell of an LSTM takes the current state and an input, and returns a nex
 As used in Aural2, the state consists of 256 float32s and the input is the 13 values of the MFCC.
 
 # Architecture
-The primary TF compute graphs use by Aural are as follows.
+The primary TF compute graphs used by Aural are as follows.
 
 - Step MFCC: Takes 1024 bytes of int16 PCM. Returns a `[13]` tensor.
 - Clip MFCC: Takes 160,000 bytes of int16 PCM. Returns a `[312,13]` tensor.
@@ -63,7 +63,7 @@ These graphs will not be discuses in detail here.
 Sound is recorded at a sample rate of 16000Hz with 16 bit depth.
 512 sample windows are read and, both written to a ring buffer and fed into a TF graph to compute the MFCC, producing a tensor of shape `[13]`.
 This tensor is used as the input to the one or more inference LSTM graphs.
-The output of the LSTMs, once `matmul`ed, is a list of 50 floats between 0 and 1.
+The output of the LSTMs, once `matmul`ed, and `softmaxed` is a list of 50 floats between 0 and 1.
 The `n`th element of the output is the probability that the world is in state `n`.
 As the world must be in one and only one state, the probabilities of the various states always sum to 1.
 
@@ -86,7 +86,7 @@ It is forbidden for two label in a set to overlap.
 Once the user has created all labels for the clip, the label set is submitted to the aural2 server which both writes it to the boltDB, and adds both the label set and the corresponding audio clip to the training data object.
 
 ### Training
-The training data object contains two maps, one of inputs and one of target, where each input is of shape `[312, 13]` and type float32 and each target is of shape `[312]` and type int32.
+The training data object contains two maps, one of inputs and one of targets, where each input is of shape `[312, 13]` and type float32 and each target is of shape `[312]` and type int32.
 
 When aural2 starts, it reads the list of label sets from the boltDB and the audio clips to which they refer, and adds them to the training data object.
 
@@ -113,14 +113,14 @@ The weight and bias variables are updated by the training graph, and the accurac
 The variables stay on the GPU, or whatever compute device TensorFlow has decided to use,  and need never leave.
 TensorFlow transparently handles locking to ensure that the various graphs can read and write to the shared memory safely.
 
-# Unscientific impractical observations
+# Unscientific observations
 Given 30 seconds of audio, aural2 is able to learn recognize simple commands with ~90% accuracy.
 
 # Shortcomings
 Although perhaps superior to existing technology in latency, simplicity, and speed of training, aural2 is inherently of limited scalability, and as such, can have no ambition for use in full vocabulary natural language parsing.
 
 Additionally, aural2 leaves much to be desirable with regard to the labeling of training data.
-While it can save audio on command, this merely helps to collect unlabeled audio rich in states which a past state of the user decided the model had misclassified; it does nothing to label the audio with the true state.
+While it can save audio on command, this merely helps to collect unlabeled audio rich in states which the user decided the model had misclassified; it does nothing to label the audio with the true state.
 
 A significant improvement to aural2 would be to make use of user feedback to directly train via reinforcement learning.
 This would require an additional model to classify user voice, facial expressions, etc, into an emotional state.
