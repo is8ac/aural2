@@ -106,11 +106,22 @@ For a complete list of intents and key bindings, see `vsh/intent/intent.go`
 
 Replete until aural2 does your bidding consistently.
 
+Trained models are written to disk every 10 minutes.
+If you wish to save models before terminating aural2, call the `/savemodels`.
+```
+curl http://localhost:48125/savemodels
+```
+
+You can also train the `ShutDown` intent, which will write models to disk before terminating.
+
 # Caveats:
-- Aural2 does not currently persist its weights on shutdown. It must retrain each time you start it. Fortunately this should only take a few minutes even on a slow CPU.
 - When running in docker, vsh cannot connect to mpd. It will fall back to just printing its actions.
 - Currently only tested on x86 Linux. Will probably work OSX, or Linux on ARM, but has not been tested.
 
+To reduce TensorFlow logging:
+```
+export TF_CPP_MIN_LOG_LEVEL=2
+```
 
 ## High Level Data Flow
 16000Hz int16 PCM is captured from microphone.
