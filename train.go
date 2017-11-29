@@ -127,6 +127,10 @@ func startTrainingLoops(db boltstore.DB, onlineSessions map[libaural2.VocabName]
 }
 
 func trainLoop(vocabName libaural2.VocabName, oSess *tftrain.OnlineSess, miniBatchChan chan miniBatch) {
+	if vocabName == libaural2.VocabName("word") {
+		logger.Println("not training word vocab")
+		return
+	}
 	var i int
 	for {
 		mb := <-miniBatchChan

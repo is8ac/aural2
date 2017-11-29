@@ -130,7 +130,7 @@ func MakeSeqInference(savedModel tf.SavedModel) (seqInference func(*tf.Tensor) (
 	return
 }
 
-// MakeStepInference returns a function that takes an output of a slice of mfccs of one clip, and returns a [][]float32 labels.
+// MakeStepInference returns a function that takes a tensor of one mfccs, and returns a []float32 labels.
 func MakeStepInference(oSession tftrain.OnlineSess) (stepInference func(*tf.Tensor) ([]float32, error), err error) {
 	input, output, placeholders, fetches, feeds, err := LoadGraph(oSession.Graph, oSession.Sess, "step_inference")
 	if err != nil {

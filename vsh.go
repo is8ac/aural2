@@ -18,6 +18,7 @@ import (
 func startVsh(
 	saveClip func(*libaural2.AudioClip),
 	stepInferenceFuncs map[libaural2.VocabName]func(*tf.Tensor) ([]float32, error),
+	beforeShutdown func(),
 ) (
 	dump func() *libaural2.AudioClip,
 ) {
@@ -49,7 +50,7 @@ func startVsh(
 	var speakerWorks = false
 	var micWorks = false
 	eb := vsh.NewEventBroker(resultChan)
-	eb.Register(intent.Vocabulary.Name, intent.ShutDown, "shutdown", vsh.MakeDefaultAction(func() { logger.Println("shutting down now. (Or I would if this was enabled)") }))
+	eb.Register(intent.Vocabulary.Name, intent.ShutDown, "shutdown", vsh.MakeDefaultAction(beforeShutdown))
 	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip", vsh.MakeDefaultAction(skipTrack))
 	eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "pause", vsh.MakeDefaultAction(pauseAudio))
 	eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "play", vsh.MakeDefaultAction(playAudio))

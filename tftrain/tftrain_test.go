@@ -118,10 +118,11 @@ func TestBatchTrainLstm(t *testing.T) {
 }
 
 func TestStepTrainLinear(t *testing.T) {
-	graph, err := loadTrainGraph("models/linear_train.pb")
+	graph, err := loadTrainGraph("models/linear_train.pb") // load untrained graph
 	if err != nil {
 		t.Fatal(err)
 	}
+	// make the first online session
 	oSess, err := NewOnlineSess(graph, "x", "y", "train", "init", "loss", "output", "x", []string{"output"})
 	if err != nil {
 		t.Fatal(err)
@@ -155,8 +156,68 @@ func TestStepTrainLinear(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatal("wrong len")
 	}
-}
+	frozen, err := oSess.Save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create("linear_train_saved.pb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = frozen.WriteTo(f); err != nil {
+		t.Fatal(err)
+	}
+	// Now do the same thing over agin with the frozen graph.
+	graph, err = loadTrainGraph("linear_train_saved.pb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oSess, err = NewOnlineSess(graph, "x", "y", "train", "init", "loss", "output", "x", []string{"output"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputTensor, targetTensor, _ = getTrainingData(0)
+	loss2, err = oSess.Train(inputTensor, targetTensor)
+	if err != nil {
+		t.Fail()
+	}
+	inputTensor, targetTensor, _ = getTrainingData(1)
+	loss3, err := oSess.Train(inputTensor, targetTensor)
+	if err != nil {
+		t.Fail()
+	}
+	logger.Println(loss2, loss3)
+	if !(loss3 < loss2) {
+		t.Fatal("loss did not decrease")
+	}
+	output, err = oSess.Infer(inputTensor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.Shape()[0] != 4 {
+		t.Fatal("wrong shape")
+	}
+	weightVar = graph.Operation("weight")
+	results, err = oSess.Run(map[tf.Output]*tf.Tensor{}, []tf.Output{weightVar.Output(0)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatal("wrong len")
+	}
+	frozen, err = oSess.Save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err = os.Create("linear_train_save2.pb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = frozen.WriteTo(f); err != nil {
+		t.Fatal(err)
+	}
 
+}
 
 func TestStepTrainLSTM(t *testing.T) {
 	graph, err := loadTrainGraph("models/lstm_train.pb")
@@ -171,9 +232,13 @@ func TestStepTrainLSTM(t *testing.T) {
 		"step_inference/softmax/output",
 		"step_inference/initial_state_names",
 		"step_inference/final_state_names",
+		"step_inference/loss_monitor/count",
+		"seq_inference/loss_monitor/count",
+		"seq_inference/loss_monitor/sum_mean_loss",
+		"step_inference/loss_monitor/sum_mean_loss",
 		"zeros",
 	}
-	oSess, err := NewOnlineSess(graph, "training/inputs", "training/targets", "training/Adam", "init", "training/loss_monitor/truediv", "step_inference/softmax/output", "step_inference/inputs", requiredOutputs)
+	oSess, err := NewOnlineSess(graph, "training/inputs", "training/targets", "training/Adam", "init", "training/loss_monitor/div", "step_inference/softmax/output", "step_inference/inputs", requiredOutputs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,13 +248,14 @@ func TestStepTrainLSTM(t *testing.T) {
 		t.Fail()
 	}
 	var loss2 float32
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 20; i++ {
 		inputTensor, targetTensor, _ = getTrainingData(1)
 		loss2, err = oSess.Train(inputTensor, targetTensor)
 		if err != nil {
 			t.Fail()
 		}
 	}
+	logger.Println(loss1, loss2)
 	if !(loss2 < loss1) {
 		t.Fatal("loss did not decrease")
 	}
@@ -206,15 +272,62 @@ func TestStepTrainLSTM(t *testing.T) {
 	if len(output.Shape()) != 2 {
 		t.Fatal("wrong dim")
 	}
-	weightVar := graph.Operation("softmax/softmax_w")
-	if weightVar == nil {
-		t.Fatal("can't find softmax/softmax_w")
-	}
-	results, err := oSess.Run(map[tf.Output]*tf.Tensor{}, []tf.Output{weightVar.Output(0)})
+	frozen, err := oSess.Save()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(results) != 1 {
-		t.Fatal("wrong len")
+	f, err := os.Create("lstm_train_save.pb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = frozen.WriteTo(f); err != nil {
+		t.Fatal(err)
+	}
+
+	// now do it all ever again with the frozen graph
+	graph, err = loadTrainGraph("lstm_train_save.pb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oSess, err = NewOnlineSess(graph, "training/inputs", "training/targets", "training/Adam", "init", "training/loss_monitor/div", "step_inference/softmax/output", "step_inference/inputs", requiredOutputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputTensor, targetTensor, _ = getTrainingData(0)
+	var loss3 float32
+	for i := 0; i < 20; i++ {
+		inputTensor, targetTensor, _ = getTrainingData(1)
+		loss3, err = oSess.Train(inputTensor, targetTensor)
+		if err != nil {
+			t.Fail()
+		}
+	}
+	logger.Println(loss3)
+	if !(loss3 < loss2) {
+		t.Fatal("loss did not decrease, probably failed to save trained vars correctly.")
+	}
+	inputTensor, err = tf.NewTensor([][][]float32{[][]float32{[]float32{0.3, 0.7, 0.8, 0.2, 0.5, 0.1, 0.6, 0.2, 0.5, 0.1, 0.6, 0.1, 0.6}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logger.Println(inputTensor.Shape())
+	output, err = oSess.Infer(inputTensor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logger.Println(output.Shape())
+	if len(output.Shape()) != 2 {
+		t.Fatal("wrong dim")
+	}
+	frozen, err = oSess.Save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err = os.Create("lstm_train_save2.pb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = frozen.WriteTo(f); err != nil {
+		t.Fatal(err)
 	}
 }

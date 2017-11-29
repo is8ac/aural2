@@ -18,6 +18,7 @@ import (
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tftrain"
 	"github.ibm.com/Blue-Horizon/aural2/urbitname"
+	"os"
 )
 
 func parseURLvar(urlVar string) (clipID libaural2.ClipID, err error) {
@@ -272,6 +273,28 @@ func makeSampleHandler(putClipID func(libaural2.ClipID) error, dump func()*libau
 	}
 }
 
+func makeSaveModel(onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		for vocabName, oSess := range onlineSessions {
+			logger.Println("writing", vocabName, "model to disk")
+			frozenGraph, err := oSess.Save()
+			if err != nil {
+				logger.Println(err)
+				continue
+			}
+			f, err := os.Create("models/" + string(vocabName) + ".pb")
+			if err != nil {
+				logger.Println(err)
+				continue
+			}
+			if _, err = frozenGraph.WriteTo(f); err != nil {
+				logger.Println(err)
+			}
+		}
+	}
+}
+
+
 func renderColorLabelSetImage(labelSet libaural2.LabelSet) (pngBytes []byte, err error) {
 	image := image.NewRGBA(image.Rect(0, 0, libaural2.StridesPerClip, 1))
 	for x, state := range labelSet.ToStateArray() {
@@ -347,6 +370,7 @@ func serve(
 	r.HandleFunc("/labelsset/{vocab}/{sampleID}", makeWriteLabelsSet(putLabelSets, namesPrs)).Methods("POST")
 	r.HandleFunc("/labelsset/{vocab}/{sampleID}", makeServeLabelsSetDerivedBlob(namesPrs, db.GetLabelSet, serializeLabelSet)).Methods("GET")
 	r.HandleFunc("/saveclip", makeSampleHandler(db.PutClipID, dumpClip))
+	r.HandleFunc("/savemodels", makeSaveModel(onlineSessions))
 	fs := http.FileServer(http.Dir("webgui/static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.Handle("/", r)

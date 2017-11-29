@@ -16,7 +16,7 @@ import (
 	pbtf "github.ibm.com/Blue-Horizon/aural2/tfutils/demo/protobuf/tensorflow/core/framework"
 )
 
-var logger = log.New(os.Stdout, "tfutils: ", log.Lshortfile)
+var logger = log.New(os.Stdout, "tftrain: ", log.Lshortfile)
 
 func loadTrainGraph(path string) (graph *tf.Graph, err error) {
 	graphBytes, err := ioutil.ReadFile(path)
@@ -72,6 +72,9 @@ func getDeps(allNodes map[string]*pbtf.NodeDef, nodeName string) (requiredNodes 
 	suffix := regexp.MustCompile(`\:[0-9]$`)             // matches the output at the end of the operation name
 	outputSuffix := suffix.FindString(nodeName)          // get the output suffix
 	nodeName = strings.TrimRight(nodeName, outputSuffix) // remove it, so as to get only the operation name
+	if nodeName[0] == '^' {                              // strip leading ^ from name.
+		nodeName = nodeName[1:] // I don't know why TF adds it sometimes, but it's not needed AFACT.
+	}
 	node, prs := allNodes[nodeName]
 	if prs { // if the operation is not present, ignore it, it was probably already included.
 		requiredNodes = []*pbtf.NodeDef{node}  // start the list of nodes with the head
@@ -101,6 +104,36 @@ func listVarNames(nodes []*pbtf.NodeDef) (varNames []string) {
 	return
 }
 
+func listVarHandleNames(nodes []*pbtf.NodeDef) (varHandleNames []string) {
+	for _, varNode := range nodes {
+		if varNode.Op == "VariableV2" {
+			for _, node := range nodes {
+				if len(node.Input) == 1 && node.Input[0] == varNode.Name && node.Op == "Identity" {
+					varHandleNames = append(varHandleNames, node.Name)
+				}
+			}
+		}
+	}
+	return
+}
+
+func getInitNames(nodesMap map[string]*pbtf.NodeDef, initOPname string) (varNames, initValueNames []string) {
+	for _, initNodeName := range nodesMap[initOPname].Input {
+		if initNodeName[0] == '^' { // strip leading ^ from name.
+			initNodeName = initNodeName[1:] // I don't know why TF adds it sometimes, but it's not needed AFACT.
+		}
+		logger.Println(initNodeName)
+		initNode := nodesMap[initNodeName]
+		logger.Println(initNode.Input)
+		if len(initNode.Input) != 2 {
+			panic(initNode.Name + "does not have 2 inputs")
+		}
+		varNames = append(varNames, initNode.Input[0])
+		initValueNames = append(initValueNames, initNode.Input[1])
+	}
+	return
+}
+
 // pull out the actual values of each var as tensors.
 func evalVars(varNames []string, graph *tf.Graph, sess *tf.Session) (tensors []*tf.Tensor, err error) {
 	varOutputs := make([]tf.Output, len(varNames))
@@ -110,7 +143,7 @@ func evalVars(varNames []string, graph *tf.Graph, sess *tf.Session) (tensors []*
 			err = errors.New("can't find node " + name) // complain
 			return
 		}
-		logger.Println(op.Output(0).Shape(), op.Name())
+		//logger.Println(op.Output(0).Shape(), op.Name())
 		varOutputs[i] = op.Output(0) // if not, put the operations first output in the list of outputs
 	}
 	tensors, err = sess.Run( // run graph, pulling on all the vars.
@@ -121,7 +154,30 @@ func evalVars(varNames []string, graph *tf.Graph, sess *tf.Session) (tensors []*
 	return
 }
 
-// addConst adds a constant of the value tensor, to the graph
+// addConstVarInitializer adds a constant of the value tensor to the graph
+func addConstVarInitializer(graph *tf.Graph, variable tf.Output, tensor *tf.Tensor, name string) (assignOP *tf.Operation, err error) {
+	constOp, err := graph.AddOperation(tf.OpSpec{
+		Name: name,
+		Type: "Const",
+		Attrs: map[string]interface{}{
+			"dtype": tensor.DataType(),
+			"value": tensor,
+		}})
+	if err != nil {
+		return
+	}
+	opspec := tf.OpSpec{
+		Type: "AssignVariableOp",
+		Input: []tf.Input{
+			variable,
+			constOp.Output(0),
+		},
+	}
+	assignOP, err = graph.AddOperation(opspec)
+	return
+}
+
+// addConst adds a constant of the value tensor to the graph
 func addConst(graph *tf.Graph, tensor *tf.Tensor, name string) (err error) {
 	_, err = graph.AddOperation(tf.OpSpec{
 		Name: name,
@@ -136,7 +192,7 @@ func addConst(graph *tf.Graph, tensor *tf.Tensor, name string) (err error) {
 	return
 }
 
-// Freeze replaces all variables with consts, and strip of non required nodes
+// Freeze replaces all variables with consts, and strip off non required nodes
 func Freeze(tfGraph *tf.Graph, sess *tf.Session, headNames []string) (frozenTfGraph *tf.Graph, err error) {
 	// convert to pb graph once so we can list all vars
 	pbGraph, err := tfGraphToPbGraph(tfGraph)
@@ -171,6 +227,74 @@ func Freeze(tfGraph *tf.Graph, sess *tf.Session, headNames []string) (frozenTfGr
 	}
 	pbGraph.Node = deps                            // replace the nodes of the pb graph with the shorter list of required nodes.
 	frozenTfGraph, err = pbGraphToTfGraph(pbGraph) // convert back to a tf.Graph so go tf will do checking for us.
+	if err != nil {
+		logger.Println(err)
+	}
+	return
+}
+
+// TrainableFreeze replaces all the assign consts for each variables with the trained value, and strip of non required nodes.
+// The resulting graph will still require initialisation to use, and will be larger, but can be used just like a python genorated train graph.
+func TrainableFreeze(tfGraph *tf.Graph, sess *tf.Session, headNames []string) (frozenTfGraph *tf.Graph, err error) {
+	// convert to pb graph once so we can list all vars
+	pbGraph, err := tfGraphToPbGraph(tfGraph)
+	if err != nil {
+		logger.Println(err)
+		return
+	}
+	nodesMap := nodesToMap(pbGraph.Node)              // convert the list of names to a map.
+	varNames := listVarNames(pbGraph.Node)            // extract the names of all the vars
+	tensors, err := evalVars(varNames, tfGraph, sess) // evaluate the vars to get their actual values
+	if err != nil {
+		logger.Println(err)
+		return
+	}
+	var deps []*pbtf.NodeDef
+	for _, headName := range headNames {
+		deps = append(deps, getDeps(nodesMap, headName)...) // extract the nodes that the output node depends on.
+	}
+	//logger.Println("deps:", deps)
+	pbGraph.Node = deps                            // replace the nodes of the pb graph with the shorter list of required nodes.
+	frozenTfGraph, err = pbGraphToTfGraph(pbGraph) // convert back to a tf.Graph
+
+	initOutputs := make([]tf.Output, len(varNames))
+	for i, varName := range varNames { // for each name,
+		constOp, err := frozenTfGraph.AddOperation(tf.OpSpec{
+			Name: "frozen/" + varName,
+			Type: "Const",
+			Attrs: map[string]interface{}{
+				"dtype": tensors[i].DataType(),
+				"value": tensors[i],
+			}})
+		if err != nil {
+			panic(err)
+		}
+		variable := frozenTfGraph.Operation(varName)
+		if variable == nil {
+			panic("can't find " + varName)
+		}
+		initOP, err := frozenTfGraph.AddOperation(tf.OpSpec{
+			Name: "varinit/" + varName,
+			Type: "Assign",
+			Input: []tf.Input{
+				variable.Output(0),
+				constOp.Output(0),
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
+		initOutputs[i] = initOP.Output(0)
+	}
+	initOP, err := frozenTfGraph.AddOperation(tf.OpSpec{
+		Name:  "init",
+		Type:  "ShapeN",
+		Input: []tf.Input{tf.OutputList(initOutputs)},
+	})
+	if err != nil {
+		panic(err)
+	}
+	logger.Println(initOP.Name(), initOP.Type())
 	return
 }
 
@@ -245,6 +369,7 @@ func NewOnlineSess(
 	if err != nil {
 		return
 	}
+	logger.Println(initOP.Type())
 	sess, err := tf.NewSession(graph, nil)
 	if err != nil {
 		return
@@ -278,28 +403,32 @@ func NewOnlineSess(
 		return
 	}
 	oSess = OnlineSess{
-		Graph:        graph,
-		Sess:         sess,
-		trainInputPH: inputsPH.Output(0),
-		inferInputPH: inferInputPH.Output(0),
-		targetPH:     targetsPH.Output(0),
-		trainOP:      trainOP,
-		loss:         lossOP.Output(0),
-		output:       outputOP.Output(0),
+		Graph:         graph,
+		Sess:          sess,
+		trainInputPH:  inputsPH.Output(0),
+		inferInputPH:  inferInputPH.Output(0),
+		targetPH:      targetsPH.Output(0),
+		trainOP:       trainOP,
+		loss:          lossOP.Output(0),
+		output:        outputOP.Output(0),
+		initOPName:    initOP.Name(),
+		outputOPnames: outputOpNames,
 	}
 	return
 }
 
 // OnlineSess stores a model in the process of training.
 type OnlineSess struct {
-	Graph        *tf.Graph
-	Sess         *tf.Session
-	trainInputPH tf.Output
-	inferInputPH tf.Output
-	targetPH     tf.Output
-	trainOP      *tf.Operation
-	loss         tf.Output
-	output       tf.Output
+	Graph         *tf.Graph
+	Sess          *tf.Session
+	trainInputPH  tf.Output
+	inferInputPH  tf.Output
+	targetPH      tf.Output
+	trainOP       *tf.Operation
+	loss          tf.Output
+	output        tf.Output
+	initOPName    string
+	outputOPnames []string
 }
 
 // Train trains one mini batch
@@ -313,6 +442,19 @@ func (oSess OnlineSess) Train(inputTensor *tf.Tensor, targetTensor *tf.Tensor) (
 		return
 	}
 	loss = results[0].Value().(float32)
+	return
+}
+
+// Save writes the variable values to their initialisers.
+func (oSess OnlineSess) Save() (graph *tf.Graph, err error) {
+	headNames := append(oSess.outputOPnames,
+		oSess.trainOP.Name(),
+		//oSess.initOPName,
+		oSess.loss.Op.Name(),
+		oSess.inferInputPH.Op.Name(),
+		oSess.output.Op.Name(),
+	)
+	graph, err = TrainableFreeze(oSess.Graph, oSess.Sess, headNames)
 	return
 }
 
