@@ -61,7 +61,7 @@ language such as Python[^4] or Go[^5], either for export as a GraphDef
 for later use, or for immediate evaluation.
 
 Aural2 does both: constructing the main training graph in python at
-build time, and the numerous other supporting graph in Go at
+build time, and the numerous other supporting graphs in Go at
 initialization time.
 
 Aural2's extensive use of TF compute graphs allow it to take advantage
@@ -108,20 +108,12 @@ passed foreword in each iteration.
 
 ![](aural2.png)
 
-The primary TF compute graphs used by Aural are as follows.
+The primary TF compute graphs used by Aural2 are as follows.
 
 -   Step MFCC: Takes 1024 bytes of int16 PCM. Returns a \[13\] tensor.
-
--   Clip MFCC: Takes 160,000 bytes of int16 PCM. Returns a \[312, 13\]
-    > tensor.
-
--   Step inference LSTM: Takes a \[256\] state, and a \[13\] input
-    > tensor. Returns a \[50\] one-hot[^10] output, and a final state of
-    > \[256\].
-
--   Train LSTM: Takes a \[7, 100, 13\] input tensor and a \[7, 100\]
-    > int32 target tensor. Updates the weights and biases when
-    > evaluated.
+-   Clip MFCC: Takes 160,000 bytes of int16 PCM. Returns a \[312, 13\] tensor.
+-   Step inference LSTM: Takes a \[256\] state, and a \[13\] input tensor. Returns a \[50\] one-hot[^10] output, and a final state of \[256\].
+-   Train LSTM: Takes a \[7, 100, 13\] input tensor and a \[7, 100\] int32 target tensor. Updates the weights and biases when evaluated.
 
 Note that the step inference and training LSTM graphs share weight and
 bias variables.
@@ -133,7 +125,7 @@ Sound is recorded at a sample rate of 16,000Hz with 16 bit depth. 512
 sample windows are read and, both written to a ring buffer and fed into
 a TF graph to compute the MFCC, producing a tensor of shape \[13\]. This
 tensor is used as the input to the one or more inference LSTM graphs.
-The output of the LSTM, once matmuled, and softmaxed is a list of 50
+The output of the LSTM, once `matmul`ed, and `softmax`ed is a list of 50
 floats between 0 and 1. The nth element of the output is the probability
 that the world is in state n. As the world can be in one and only one
 state, the probabilities of the various states always sum to 1.
@@ -202,25 +194,15 @@ sequences. Aural2 currently trains on 100 sample long sequences.
 
 The data preparation loop is as follows:
 
--   From the set of labeled audio clips, randomly select 7.
+- From the set of labeled audio clips, randomly select 7.
+- For each clip:
+  - At random, select two positive integers such that the second isless than 312, and exactly 100 more than the first.
+  - From both the inputs and the targets for this clip, take the slice of 100 time steps defined by the two numbers previously selected.
+- We now have 7 inputs of 100 time slices, and 7 corresponding targets of 100 time slices.
 
--   For each clip:
+- Convert these two sets to tensors, a float32 input tensor of shape \[7, 100, 13\] and an int32 target tensor of shape \[7, 100\].
 
-    -   At random, select two positive integers such that the second is
-        > less than 312, and exactly 100 more than the first.
-
-    -   From both the inputs and the targets for this clip, take the
-        > slice of 100 time steps defined by the two numbers previously
-        > selected.
-
--   We now have 7 inputs of 100 time slices, and 7 corresponding targets
-    > of 100 time slices.
-
--   Convert these two sets to tensors, a float32 input tensor of shape
-    > \[7, 100, 13\] and an int32 target tensor of shape \[7, 100\].
-
--   Write this input-target pair to the minibatch channel, blocking
-    > until there are fewer than three mini batches in the channel.
+- Write this input-target pair to the minibatch channel, blocking until there are fewer than three mini batches in the channel.
 
 The training loop reads a mini batch from the mini batch channel and
 evaluates the training LSTM graph on the inputs and targets, thereby
@@ -290,7 +272,7 @@ Aural2's use-mention distinction is, it will eventually make a mistake.
 However, if additional safely is desired, it is simple to train Aural2
 to require that some prefix, "sudo" for example, be said before
 particularly dangerous intents. Aural2 need only be taught that when the
-user says "format disk", the user does not intent that the disk be
+user says "format disk", the user does not intend that the disk be
 formatted, whereas when they user says "sudo format disk", the user does
 want the disk to be formated. Aural2 will usually learn the distinction
 with a few examples. For less dangerous intents, no prefix need be
