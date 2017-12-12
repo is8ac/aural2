@@ -393,11 +393,11 @@ various graphs can read and write to the shared memory safely.
 The neural net used by Aural2 is continuously trained in real time from
 a dynamically collected training set. The distribution of data added to
 the training set changes depending on the environment and user, which
-depend on the state of the Aural2 model. In particular, the data are
-heavily biased towards the sounds before and during sounds which the
-model thinks are the user telling it to save audio, although because of
-this bias in the training data, false positives for the "saveAudio"
-intent drop to near zero quite quickly.
+depend on the state of the Aural2 model.
+
+For example, because the collection of training data is triggered by the `saveAudio` intent, all clips of audio contain the an utterance which some past state of the model thinks is the user telling it to save audio.
+If the model is well trained, it will only contain true examples, but badly trained models will collect many false positives.
+Because of this bias, the model quickly approach 0 false positives.
 
 There is no standard training or test set for Aural2; each user is
 encouraged to generate their own training set, and to keep saving and
@@ -432,7 +432,7 @@ is that it allows such a system to use models running on servers in the
 cloud, which can be far larger than any model suitable for running on
 cheap edge devices.
 
-Additionally, requiring a wake word has various advantages. As good at
+Additionally, requiring a wake word has various advantages. As good as
 Aural2's use-mention distinction is, it will eventually make a mistake.
 However, if additional safely is desired, it is simple to train Aural2
 to require that some prefix, "sudo" for example, be said before
@@ -478,11 +478,10 @@ classifier via supervised learning, which can then be used to train an
 intent model via reinforcement learning is however somewhat inelegant.
 
 Another potential improvement would be to use a pair of one-hot embedded
-outputs, one for verbs and another for nouns. Whereas the current Aural2
-outputs the action which the user wishes the machine to take, a dual
-embedding would allow Aural2 to classify arbitrary pairs of action and
-thing to which the action is to be applied. This would allow a
-significantly larger portion of the space of commands to be represented
+outputs, one for intents and another for entities.
+Whereas the current Aural2 outputs the action which the user wishes the machine to take, a dual embedding would allow Aural2 to classify arbitrary pairs of intent and
+initiate.
+This would allow a significantly larger portion of the space of commands to be represented
 by the output.
 
 [^1]: Use-mention distinction:
