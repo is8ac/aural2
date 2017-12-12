@@ -1,6 +1,8 @@
 ---
 title: "Collecting training data to train an LSTM to classify a finite number of human intents from voice with slight negative latency, and solving the use mention distinction"
-author: "Isaac Leonard ifleonar@us.ibm.com, Chris Dye dyec@us.ibm.com"
+author:
+  - "Isaac Leonard ifleonar@us.ibm.com"
+  - "Chris Dye dyec@us.ibm.com"
 output:
   markdown::pdf_document:
     fig_caption: yes        
@@ -11,8 +13,8 @@ output:
 It is desirable to have a model which takes as input a stream of audio and returns the action which the user is currently telling the machine to perform.
 Given a good set of labeled audio, it is relatively easy to train a Long Short-Term Memory (LSTM) model to do this.
 However obtaining such a set of labeled audio is difficult.
-We present Aural2, a data collection and labeling infrastructure which helps users to quickly collecting high value training data with which it trains an LSTM model to accurately transform a stream of audio into the probability, for any given action, that the user is currently telling Aural2 to perform it.
-The models trained by Aural2 are usually capable of correctly classifying the users intent before the user has finished speaking; assuming latency to be measured from end of utterance, they has slight negative latency.
+We present Aural2, a data collection and labeling infrastructure which helps users to quickly collect high value training data with which it trains an LSTM model to accurately transform a stream of audio into the probability, for any given action, that the user is currently telling Aural2 to perform it.
+The models trained by Aural2 are usually capable of correctly classifying the user's intent before the user has finished speaking; assuming latency to be measured from end of utterance, they has slight negative latency.
 Furthermore, the model will learn to integrate past context into its classifications, allowing it to learn to accurately solve the use-mention distinction[^1], and ignore commands directed at other voice assistants, all without itself requiring the use of wake-words.
 
 We describe the architecture of Aural2, its advantages over existing
@@ -31,25 +33,25 @@ Assuming sufficiently advanced NLP, arbitrarily complex instructions may be tran
 Even if the NLP used is not sufficiently powerful to understand the full complexity of human language, it can still understand multi dimensional commands.[^alexa_slots]
 
 However, such systems fall short in certain respects.
-Text contains less information then the audio from which it was transcribed.
-STT looses importing information regarding inflection and tone.
-Purely from an information theory perspective, we should expect a system based on NLP on top of STT to be less accurate then a system which process sound into actions directly.
+Text contains less information than the audio from which it was transcribed.
+STT loses important information regarding inflection and tone.
+Purely from an information theory perspective, we should expect a system based on NLP on top of STT to be less accurate than a system which processes sound into actions directly.
 
-Even the most advanced NLP systems are unable to reliable differentiate between the mention of a word and its use, especially in context poor situations.
+Even the most advanced NLP systems are unable to reliably differentiate between the mention of a word and its use, especially in context poor situations.
 To prevent spurious actions, most voice control systems require that the user speak a predefined wake word not found in normal language before each command.
 
 Both STT and NLP require significant data to train and hardware to run.[^deep_speech]
 This makes them difficult to run on resource constrained devices, requiring that audio be sent to more powerful hardware in the cloud for processing.
-Constant streaming of audio is costly on bandwidth and a potential privacy risk, not to mention that it incurs at least one a round trip of latency to the nearest data center.
+Constant streaming of audio is costly on bandwidth and a potential privacy risk, not to mention that it incurs at least one round trip of latency to the nearest data center.
 To minimize the audio sent to the cloud, most voice control systems require that the user speak a locally detectable wake word to trigger audio transmission only when needed.
 
-Both because current NLP is unable to solve the use-mention distinction with sufficient accuracy, and because STT and NLP are too expensive in RAM and CPU to run on inexpensive hardware, most current systems must require users to speak a wake word which is both uncommon in normal speech, and can be detected by the small amount of local audio analytics, before speaking any command.
+Both because current NLP is unable to solve the use-mention distinction with sufficient accuracy, and because STT and NLP are too expensive in RAM and CPU to run on inexpensive hardware, most current systems must require users to speak a wake word which is both uncommon in normal speech and can be detected by the small amount of local audio analytics before speaking any command.
 Coupled with the latency incurred by data transfer to and from the cloud, traditional voice interfaces are painfully slow in comparison to in person interaction with a human.
 
-A system built around Aural2 can run on relatively inexpensive hardware and can solve the use-mention distinction with far better accuracy then most voice assistants, thereby allowing it to be used with no wake word.
-Not only does it not incur the latency of network communication, but it can correctly classify the users intent somewhat before the user has finished speaking, compensating for whatever other latency may be unavoidable in the system.
+A system built around Aural2 can run on relatively inexpensive hardware and can solve the use-mention distinction with far better accuracy than most voice assistants thereby allowing it to be used with no wake word.
+Not only does it not incur the latency of network communication, but it can correctly classify the user's intent somewhat before the user has finished speaking, compensating for whatever other latency may be unavoidable in the system.
 
-However, to achieve these advantage, Aural2 must make significant sacrifices in other areas such as number and complexity of actions, rendering it unsuitable for many applications.
+However, to achieve these advantages, Aural2 must make significant sacrifices in other areas such as number and complexity of actions, rendering it unsuitable for many applications.
 
 [^google_home]: https://store.google.com/product/google_home
 [^amazon_echo]: https://www.amazon.com/gp/product/B0749WVS7J
@@ -110,12 +112,12 @@ Each cell of an RNN takes as input the output of the previous cell concatenated 
 This allows them to recognise patterns in time series data of arbitrary length.
 However, for reasons[^9], RNNs have difficulty remembering long term state.
 LSTMs solve this problem by augmenting an RNN with persistent memory which it can read from and write to, thereby allowing it to persist information for arbitrarily
-longer periods.
+long periods.
 
 Aural2 currently uses a stack of two LSTMs, the first taking as input
 the series of MFCCs of audio, and the second taking the output of the
 first and producing an embedding of the user\'s intent. Both LSTMs have
-a state of size 64. As each LSTM is passing both the RNNs information
+a state of size 64. As each LSTM is passing both the RNN's information
 and the state of its memory foreword, a total of 256 float32s are being
 passed forward in each iteration.
 
@@ -126,21 +128,21 @@ passed forward in each iteration.
 
 ## Elements
 
-- Microphone: Measures air pressure. Returns a stream of 16,000Hz int16 audio.
-- Step MFCC: A TF graph which takes 1024 bytes of audio, or 512 samples, or ~32ms, of audio, and returns the `[13]` floats of an MFCC.
-- Step inference LSTM: Every ~32ms, takes an MFCC from Step MFCC, updates the `[256]` memory of the LSTM accordingly, and returns `[50]` `softmax`ed probabilities for each intent.
-- vsh: Takes the list of 50 intent probabilities from the Step inference graph, and, if the threshold is reached, triggers an action.
-- 10 Second Ring buff: Takes audio from the microphone, and stores it for 10 seconds. When triggered by vsh, writes the past 10 seconds of audio to the file system.
-- Raw audio on FS: Stores 10 second clips of raw audio given to it by the ring buffer.
-- Labeling UI: Displays each clip to the user, who labels durations within which a non nil intent was expressed.
-- MFCC Graph: Takes a whole 10 second clip of audio and returns the `[312, 13]` MFCCs for the whole clip.
-- Map of MFCCs: Stores slices of 312 MFCCs.
-- Label sets in DB: Stores sets of user created labels for each clip.
-- Sampler: Converts a set of periods of intent into a list of 312 integer intent IDs.
-- Map of Targets: Stores slices of intent IDs.
-- Mini batch generator: Takes corresponding slices from corresponding elements from the map of the MFCCs, and the map of targets, and combines them into a (`[7, 100, 13]`, `[7, 100]`) mini batch, which is written  to the buffered channel.
-- Buffered Channel: Holds a buffer of, at most, 3 mini batches.
-- Train LSTM: Reads mini batches form the buffered channel, computes loss on the current state of the variables, and backpropagates this loss over the variables.
+- **Microphone**: Measures air pressure. Returns a stream of 16,000 Hz int16 audio.
+- **Step MFCC**: A TF graph which takes 1024 bytes of audio, or 512 samples, or ~32ms, of audio, and returns the `[13]` floats of an MFCC.
+- **Step inference LSTM**: Every ~32ms, takes an MFCC from Step MFCC, updates the `[256]` memory of the LSTM accordingly, and returns `[50]` `softmax`ed probabilities for each intent.
+- **vsh**: Takes the list of 50 intent probabilities from the Step inference graph, and, if the threshold is reached, triggers an action.
+- **10 Second Ring buff**: Takes audio from the microphone, and stores it for 10 seconds. When triggered by vsh, writes the past 10 seconds of audio to the file system.
+- **Raw audio on FS**: Stores 10 second clips of raw audio given to it by the ring buffer.
+- **Labeling UI**: Displays each clip to the user, who labels durations within which a non nil intent was expressed.
+- **MFCC Graph**: Takes a whole 10 second clip of audio and returns the `[312, 13]` MFCCs for the whole clip.
+- **Map of MFCCs**: Stores slices of 312 MFCCs.
+- **Label sets in DB**: Stores sets of user created labels for each clip.
+- **Sampler**: Converts a set of periods of intent into a list of 312 integer intent IDs.
+- **Map of Targets**: Stores slices of intent IDs.
+- **Mini-batch generator**: Takes corresponding slices from corresponding elements from the map of the MFCCs, and the map of targets, and combines them into a (`[7, 100, 13]`, `[7, 100]`) mini-batch, which is written  to the buffered channel.
+- **Buffered Channel**: Holds a buffer of, at most, 3 mini-batches.
+- **Train LSTM**: Reads mini-batches from the buffered channel, computes loss on the current state of the variables, and backpropagates this loss over the variables.
 
 Note that the step inference and training LSTM graphs share weight and
 bias variables.
@@ -150,16 +152,16 @@ These graphs will not be discussed in detail here.
 
 ## Hyperparameters
 
-- **Sequence length**: The number of LSTM cells to unroll when training. Currently 100, which at current window size, is ~3 seconds. Higher values mean slower build and training. Shorter values cost ability to learn long commands. Note that the inference graph is unaffected by sequence length; it only apples when training using backpropagation.
-- **Clip duration**: The duration of each saved clip of audio. Currently 10 seconds. Must be somewhat longer then the duration of the longest command + the time needed for the user to recognize a mistake and tell Aural2 to save audio. The user must listen to the whole clip when labeling, so excessively long clips waste the users time.
-- **Window size**: The number of samples of audio to use in each MFCC. Currently 512 samples. Smaller windows will increase time resolution, and therefore, compute cost, at some (probably small) cost to the models ability to learn long therm patterns. Extremely small windows will cost low frequency accuracy.
-- **MFCC size**: The number of bins in the MFCC. Currently 13 because that was the default in the TensorFlow implementation. Larger values will get better frequency resoluteness at some cost to model size and compute cost.
-- **Mini batch size**: The number of labeled sequences on which to compute loss when training. Currently 7. Larger values will result in better accuracy in loss calculation, and consequently smoother gradient decent along with less training overhead, but with greater compute cost per mini batch.
+- **Sequence length**: The number of LSTM cells to unroll when training. Currently 100, which at current window size is ~3 seconds. Higher values mean slower build and training. Shorter values cost ability to learn long commands. Note that the inference graph is unaffected by sequence length; it only apples when training using backpropagation.
+- **Clip duration**: The duration of each saved clip of audio. Currently 10 seconds. Must be somewhat longer than the duration of the longest command + the time needed for the user to recognize a mistake and tell Aural2 to save audio. The user must listen to the whole clip when labeling, so excessively long clips waste the user's time.
+- **Window size**: The number of samples of audio to use in each MFCC. Currently 512 samples. Smaller windows will increase time resolution, and therefore compute cost, at some (probably small) cost to the models ability to learn long term patterns. Extremely small windows will cost low frequency accuracy.
+- **MFCC size**: The number of bins in the MFCC. Currently 13 because that was the default in the TensorFlow implementation. Larger values will get better frequency resolution at some cost to model size and compute cost.
+- **Mini-batch size**: The number of labeled sequences on which to compute loss when training. Currently 7. Larger values will result in better accuracy in loss calculation, and consequently smoother gradient decent along with less training overhead, but with greater compute cost per mini-batch.
 - **LSTM state size**: The number of float32s in which the LSTM stores its state. Currently 64. Larger values allow the model to remember more complex state while requiring more memory and compute. Extremely large values will allow overfitting.
 
 ## LSTM Model
 Aural2 uses a fairly standard stacked LSTM.
-Sound is recorded at a sample rate of 16,000Hz with 16 bit depth.
+Sound is recorded at a sample rate of 16,000 Hz with 16-bit depth.
 512 sample windows of this audio are fed into a TF graph to compute the MFCC, producing a tensor of shape \[13\].
 This tensor is used as the input to the first LSTM.
 This LSTM produces an output of the same size as its state which is used as the input for the second LSTM.
@@ -171,18 +173,18 @@ As the world can be in one and only one state, the probabilities of the various 
 When training, we try to minimize the loss of the model.
 In this context, loss is calculated as the sum of the square of the differences between actual and target.
 
-Recall that the actual and target are lists of one hot embedded states.
+Recall that the actual and target are lists of one-hot embedded states.
 Take the example of a vocabulary of 3 states.
-Looking at only one time step, if the actual is [0.0, 1.0, 0.0], and the target is [0.6, 0.3, 0.1], the loss is
+Looking at only one time step, if the target is [0.0, 1.0, 0.0], and the actual is [0.6, 0.3, 0.1], the loss is:
 
 $$
-(0.0 - 0.6) ^ 2 + (1.0 - 0.3) ^ 2 + (0.0 - 0.1) ^ 2
+(0.0 - 0.6) ^ 2 + (1.0 - 0.3) ^ 2 + (0.0 - 0.1) ^ 2 =
 $$
 $$
--0.6^2 + 0.7^2 + 0.1^2
+-0.6^2 + 0.7^2 + 0.1^2 =
 $$
 $$
-0.36 + 0.49 + 0.01
+0.36 + 0.49 + 0.01 =
 $$
 $$
 0.86
@@ -197,19 +199,20 @@ If the information which the model possesses is of approximately equal likelihoo
 Let us assume a world which can be in any of three states, 0, 1, or 2.
 At each time step, it can change its state.
 However most of the time, its state does not change.
-We can model this world as a Markov chain where the strength of each nodes connection to itself is at least an order of magnitude greater then the strength of its connections to other nodes.
+We can model this world as a Markov chain where the strength of each node's connection to itself is at least an order of magnitude greater than the strength of its connections to other nodes.
 We cannot directly observe the state of the world.
 However, there exist a few bits of information whose states at each time step occur with different frequency and in different patterns depending on the past and present state of the world.
 This information we can observe.
 
-A single time step of information often appears in multiple states with similar frequency, it gives us only weak evidence of the state our world is currently in.
+A single time step of information often appears in multiple states with similar frequency; it gives us only weak evidence of the state our world is currently in.
 From a single time step, we cannot reduce the list of states which we could be living in to one.
 We must observe the information for multiple time steps if we are to confidently know the exact world we live in.
-While the world has been in state $a$ for many past time steps, we have a strong prior of the world being in state $a$; the absence of strong evidence of not being in state $a$ is sufficient to give us a reasonably strong belief that the word is in state $a$.
+While the world has been in state $a$ for many past time steps, we have a strong prior of the world being in state $a$.
+The absence of strong evidence of not being in state $a$ is sufficient to give us a reasonably strong belief that the word is in state $a$.
 However, if the state changes, if we have strong evidence that the world is no longer in state $a$, we no longer have good priors, and must observe many time steps of information to gain strong beliefs about the current state.
 
 Imagine a simple LSTM.
-For the past many steps it has been observing patterns of information which occur with far more frequency in world of state 0.
+For the past many steps it has been observing patterns of information which occur with far greater frequency in world of state 0.
 Say that the probably of the world transitioning from state 0 to state 0 is 0.9, and probabilities of state 0 transitioning to states 1 or 2 are 0.05.
 Given that the world is in state 0, there is a high prior probably that it will be in state 0 in the next time step.
 But if the LSTM observes information which is very rarely observed when in worlds of state 0, this is evidence sufficient to overcome the strong prior probably and stop believing that it is in a world of state 0.
@@ -222,7 +225,7 @@ After observing many time steps of information more likely to be observed when i
 
 ## vsh
 The LSTM model outputs a list of probabilities of intents every 32ms.
-While far more useful then before, this format of information is still not maximally convenient for our purposes.
+While far more useful than before, this format of information is still not maximally convenient for our purposes.
 The simple preprocessing layer used by Aural2 is called Voice SHell, or vsh.
 It is quite primitive and may be replaced by some more powerful system such as Intu[^intu].
 However it has several important features necessary to make good use of the output of LSTM.
@@ -230,8 +233,8 @@ However it has several important features necessary to make good use of the outp
 [^intu]: https://github.com/watson-intu/self
 
 An LSTM trained by Aural2 tries to reduce loss.
-A model which assigns high confidence to only the second part of the utterance "Play" being the `PlayMusic` intent has greater loss then a model which assigns high probability to every part of the utterance being the `PlayMusic` intent.
-A model which assigns a probability of 0.6 to the utterance "Play" being the `PlayMusic` intent has greater loss then a model which which assigns a probability of 0.9 to the utterance being the `PlayMusic` intent.
+A model which assigns high confidence to only the second part of the utterance "Play" being the `PlayMusic` intent has greater loss than a model which assigns high probability to every part of the utterance being the `PlayMusic` intent.
+A model which assigns a probability of 0.6 to the utterance "Play" being the `PlayMusic` intent has greater loss than a model which which assigns a probability of 0.9 to the utterance being the `PlayMusic` intent.
 The model wants to classify the whole utterance with high probability.
 These same principles work in reverse.
 
@@ -245,7 +248,7 @@ Once the user is finished with their command and the world changes back to the n
 All of this takes place in the few hundred milliseconds during which the user is saying the word "Play".
 
 vsh allows event handler functions to be registered for each of the outputs.
-When an output is greater then the specified threshold, it is called.
+When an output is greater than the specified threshold, it is called.
 A perfect LSTM will fire the `PlayMusic` every 32ms for the entire duration of the utterance.
 While causing music to start playing several times will likely not cause significant harm, other intents are not safe to be called multiple times in quickly succession.
 Therefore, the primary task of vsh is to transform the LSTMs classification of the intent which the user is currently expressing, into single events which fire only once for each command.
@@ -268,7 +271,7 @@ Note that the vocabulary of states which a single model can classify must be exc
 It is not possible for a user to be telling the machine to play music and to pause it, at the same time.
 These world states are exclusive and can be classified by the same model.
 The user being happy, and wanting music to play, and being Alice, can all be true at the same time.
-To classify the users emotional state, intent, and identity, one would need three distinct vocabularies and corresponding models.
+To classify the user's emotional state, intent, and identity, one would need three distinct vocabularies and corresponding models.
 But in most usage, we merely wish to classify the intent which the user is currently expressing.
 People almost always express zero or one intents at any given time.
 Therefore, if we wish the model to classify the intent which the the user is currently expressed, we can use a softmax output with state 0 reserved for the nil intent.
@@ -283,12 +286,12 @@ This is import information about the intent which the user is currently expressi
 As the past few seconds contained no utterances, the current utterance is probably using the word, not just mentioning it.
 However there are multiple intents which, when expressed, begin with white noise.
 Given the information available, the model can not know if the user is expressing the "PlayMusic" intent, or the "PruneShrubbery" intent, or if the white noise was produces by some other source.
-We would therefore like it to output significant, but still less then 0.5, values for states 0, 1 and 3.
+We would therefore like it to output significant, but still less than 0.5, values for states 0, 1 and 3.
 
 Each time a 32 millisecond window passes, a new MFCC is given to the LSTM with new information about the state of the world.
 A new MFCC arrives, and this time, it does not contain much white noise and instead the frequency distribution looks quite like that of the "l" phoneme.
 Assuming that the only intent which starts with a few steps of while noise followed by the "l" phoneme is the `PlayMusic` intent, we would like the LSTM to start to output a value close to 1 for state 1 of its output.
-At this point, vsh, having received the `PlayMusic` intent with greater then 0.9 confidence, will start to play the music.
+At this point, vsh, having received the `PlayMusic` intent with greater than 0.9 confidence, will start to play the music.
 As the user continues speaking the word "play", we want the LSTM to continue to output a high value for state 1.
 But as soon as the LSTM receives an MFCC of silents, we want it to go back to outputting a value close to 1 for state 0, and close to 0 for every other state.
 
@@ -367,9 +370,9 @@ The data preparation loop is as follows:
 
 - Convert these two sets to tensors, a float32 input tensor of shape \[7, 100, 13\] and an int32 target tensor of shape \[7, 100\].
 
-- Write this input-target pair to the minibatch channel, blocking until there are fewer than three mini batches in the channel.
+- Write this input-target pair to the minibatch channel, blocking until there are fewer than three mini-batches in the channel.
 
-The training loop reads a mini batch from the mini batch channel and
+The training loop reads a mini-batch from the mini-batch channel and
 evaluates the training LSTM graph on the inputs and targets, thereby
 updating the weights and biases.
 
