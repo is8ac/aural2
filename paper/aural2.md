@@ -169,7 +169,7 @@ As the world can be in one and only one state, the probabilities of the various 
 
 ### Loss
 When training, we try to minimize the loss of the model.
-The loss of a model is calculated as the sum of the square of the differences between actual and target.
+In this context, loss is calculated as the sum of the square of the differences between actual and target.
 
 Recall that the actual and target are lists of one hot embedded states.
 Take the example of a vocabulary of 3 states.
@@ -189,50 +189,36 @@ $$
 $$
 
 We see that a model can minimize its loss by reducing the differences between its actual output and the target.
-Observe that due to the nonlinearity of squaring, large differences in one element of the output are punished disproportionately.
+Due to the nonlinearity of squaring, large differences in one element of the output are punished disproportionately.
 The model is therefore cautious in the absence of good information.
 If the information which the model possesses is of approximately equal likelihood to be observed in worlds which are in each of the three states, a good model will output ~0.33 for all outputs so as minimize loss.
 
 ### Causality
-Given that we have a world which can be in any of three states, 0, 1, or 2.
-Each time step it can change its state.
+Let us assume a world which can be in any of three states, 0, 1, or 2.
+At each time step, it can change its state.
 However most of the time, its state does not change.
 We can model this world as a Markov chain where the strength of each nodes connection to itself is at least an order of magnitude greater then the strength of its connections to other nodes.
-The LSTM cannot directly observe the state of the world.
-However, there exist a few bit of information whose states at each time step occur with different frequency and in different patterns depending on the past and present state of the world.
-This information the LSTM can observe.
+We cannot directly observe the state of the world.
+However, there exist a few bits of information whose states at each time step occur with different frequency and in different patterns depending on the past and present state of the world.
+This information we can observe.
 
-Any single time step of information may be observed in more then one worlds.
-If we observe only a single time step of information, while we can reduce the number of possible worlds, we can not know with confidence exactly which of the worlds we live in.
-We must observe the information for multiple time steps if we are to confidently reduce the number of possible worlds to one.
+A single time step of information often appears in multiple states with similar frequency, it gives us only weak evidence of the state our world is currently in.
+From a single time step, we cannot reduce the list of states which we could be living in to one.
+We must observe the information for multiple time steps if we are to confidently know the exact world we live in.
+While the world has been in state $a$ for many past time steps, we have a strong prior of the world being in state $a$; the absence of strong evidence of not being in state $a$ is sufficient to give us a reasonably strong belief that the word is in state $a$.
+However, if the state changes, if we have strong evidence that the world is no longer in state $a$, we no longer have good priors, and must observe many time steps of information to gain strong beliefs about the current state.
 
 Imagine a simple LSTM.
 For the past many steps it has been observing patterns of information which occur with far more frequency in world of state 0.
-Say that the probably of the world changing from state 0 to state 0 is 0.9, and probabilities of state 0 changing to states 1 or 2 are 0.05.
-Given that the world is in state 0, there is a high prior probably that it will be in state 0 next time step.
-However, if the LSTM observes information which is very rarely observed when in worlds of state 0, this is evidence sufficient to overcome the strong prior probably and stop believing that it is in a world of state 0.
-However this new information is often observed with approximately equal frequency in worlds of both state 1 and state 2.
+Say that the probably of the world transitioning from state 0 to state 0 is 0.9, and probabilities of state 0 transitioning to states 1 or 2 are 0.05.
+Given that the world is in state 0, there is a high prior probably that it will be in state 0 in the next time step.
+But if the LSTM observes information which is very rarely observed when in worlds of state 0, this is evidence sufficient to overcome the strong prior probably and stop believing that it is in a world of state 0.
+However this new information is often observed with approximately equal frequency in worlds of state 1 and state 2.
 Although it knows that it is not in state 0, it does not know whether it is in state 1 or 2.
-The LSTM will therefor output a probabilities of, for example, 0.06 for state 0, and probabilities of 0.47 for 1 and 2.
+Recall that loss is calculated as the square of the different between the models outputs and the true state of the world.
+The LSTM will therefore output a probabilities of, for example, 0.06 for state 0, and probabilities of 0.47 for 1 and 2.
 As it observes new information, it updates the probabilities that it is in worlds 1 and 2.
-
-
-While the world state does not change, the LSTM can know the worlds current state with fairly good accuracy.
-But should the world change, although the LSTM may know that the world has changed state, the first time step of information produced by the new state could have been observed in ether of the two other worlds.
-The LSTM cannot update its beliefs regarding the new state before the world changes; the best it can do it to respond only slightly after the state of the world changes.
-
-
-Let us assume that the information which the model is observing is a function of the world state.
-A model cannot get information about the future world state, only the past.
-Often, a single time step of information can appear in worlds which are in multiple states.
-From a single time step, we can not reduce the list of worlds which we may be living in to one.
-To do this, we need multiple time steps of information.
-
-Models which correctly update their beliefs after fewer timestamps of information will have lower loss then models which remain uncertain for longer.
-But at the same time, models which update to be completely confident of the new state of the world before they have received sufficient information will often be wrong and will incur large losses by there overconfidence.
-
-A good model then is one which becomes confident of the state of the world as soon as there is sufficient information, but no sooner.
-
+After observing many time steps of information more likely to be observed when in, for example, state 2, it will once again assign a probability of, for example 1.96 to being in state 2, and assign a high prior probability to being in state 2 next iteration.
 
 ## vsh
 The LSTM model outputs a list of probabilities of intents every 32ms.
@@ -243,10 +229,32 @@ However it has several important features necessary to make good use of the outp
 
 [^intu]: https://github.com/watson-intu/self
 
-An LSTM trained by Aural2 tries to always be right.
-A model which classifies only the second part of the utterance "Play" as the `PlayMusic` intent is less accurate then a model which classifies every part of the utterance as the `PlayMusic` intent.
-That said,
+An LSTM trained by Aural2 tries to reduce loss.
+A model which assigns high confidence to only the second part of the utterance "Play" being the `PlayMusic` intent has greater loss then a model which assigns high probability to every part of the utterance being the `PlayMusic` intent.
+A model which assigns a probability of 0.6 to the utterance "Play" being the `PlayMusic` intent has greater loss then a model which which assigns a probability of 0.9 to the utterance being the `PlayMusic` intent.
+The model wants to classify the whole utterance with high probability.
+These same principles work in reverse.
 
+As a result of this, when the user first begins to utter a command, the LSTM will output increased probabilities for the several intents which the user could be in the process of uttering.
+Because the output probabilities must sum to 1, the several possible outputs will all individually be fairly low; beginning to utter a command causes the maximum probability to fall.
+However, as the user utters more of the command, the LSTM will receive patterns of information which are frequently observed in worlds in which the user is commanding the machine to play music, and are very rarely observed in worlds in which the user is commanding the machine to prune the shrubbery.
+With time, the probability for the `PlayMusic` intent will approach 1 while the probability for the other intents will approach 0.
+
+Once the user is finished with their command and the world changes back to the nil state, the LSTM must again update its beliefs, this time reverting back to outputting close to 1 for the nil intent, and close to 0 for all others.
+
+All of this takes place in the few hundred milliseconds during which the user is saying the word "Play".
+
+vsh allows event handler functions to be registered for each of the outputs.
+When an output is greater then the specified threshold, it is called.
+A perfect LSTM will fire the `PlayMusic` every 32ms for the entire duration of the utterance.
+While causing music to start playing several times will likely not cause significant harm, other intents are not safe to be called multiple times in quickly succession.
+Therefore, the primary task of vsh is to transform the LSTMs classification of the intent which the user is currently expressing, into single events which fire only once for each command.
+This is easily achieve by the use of a boolean variable for each output which is set to `true` when the upper threshold is reached and the event handler is called, and `false` when the output falls below some lower threshold.
+vsh then need only check for this variable, and call the event handler only if the variable is false.
+
+In this way, vsh watches the output of the LSMT every 32ms and calls the appropriate event handler exactly once each time the user utters a command.
+And as a side effect of the LSTM attempt to classify the whole duration of the utters, vsh call the event handler after only a small portion of the utterance has been spoke.
+Thus, while information can not travel backwards in time, still, vsh on top of an LSTM trained on data labeled via Aural2 will take the appropriate action well before the user has finished speaking their command; if latency is measured from end utterance, it is negative.
 
 # Training
 ## Desired behavior
@@ -443,8 +451,7 @@ We find that, from a few minutes of training data, Aural2 is well able to learn 
 Google home and Amazon echo can therefore be used in parallel with Aural2.
 
 
-We invite readers to download Aural2 at \<insert link\> so as to
-evaluate it for themselves.
+We invite readers to download Aural2 at https://github.ibm.com/ifleonar/aural2 so as to evaluate it for themselves.
 
 ## Shortcomings
 
