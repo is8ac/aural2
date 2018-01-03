@@ -118,7 +118,7 @@ Aural2 currently uses a stack of two LSTMs, the first taking as input
 the series of MFCCs of audio, and the second taking the output of the
 first and producing an embedding of the user\'s intent. Both LSTMs have
 a state of size 64. As each LSTM is passing both the RNN's information
-and the state of its memory foreword, a total of 256 float32s are being
+and the state of its memory forward, a total of 256 float32s are being
 passed forward in each iteration.
 
 # Architecture
@@ -218,7 +218,7 @@ Given that the world is in state 0, there is a high prior probably that it will 
 But if the LSTM observes information which is very rarely observed when in worlds of state 0, this is evidence sufficient to overcome the strong prior probably and stop believing that it is in a world of state 0.
 However this new information is often observed with approximately equal frequency in worlds of state 1 and state 2.
 Although it knows that it is not in state 0, it does not know whether it is in state 1 or 2.
-Recall that loss is calculated as the square of the different between the models outputs and the true state of the world.
+Recall that loss is calculated as the square of the difference between the models outputs and the true state of the world.
 The LSTM will therefore output a probabilities of, for example, 0.06 for state 0, and probabilities of 0.47 for 1 and 2.
 As it observes new information, it updates the probabilities that it is in worlds 1 and 2.
 After observing many time steps of information more likely to be observed when in, for example, state 2, it will once again assign a probability of, for example 1.96 to being in state 2, and assign a high prior probability to being in state 2 next iteration.
@@ -250,7 +250,7 @@ All of this takes place in the few hundred milliseconds during which the user is
 vsh allows event handler functions to be registered for each of the outputs.
 When an output is greater than the specified threshold, it is called.
 A perfect LSTM will fire the `PlayMusic` every 32ms for the entire duration of the utterance.
-While causing music to start playing several times will likely not cause significant harm, other intents are not safe to be called multiple times in quickly succession.
+While causing music to start playing several times will likely not cause significant harm, other intents are not safe to be called multiple times in quick succession.
 Therefore, the primary task of vsh is to transform the LSTMs classification of the intent which the user is currently expressing, into single events which fire only once for each command.
 This is easily achieve by the use of a boolean variable for each output which is set to `true` when the upper threshold is reached and the event handler is called, and `false` when the output falls below some lower threshold.
 vsh then need only check for this variable, and call the event handler only if the variable is false.
@@ -262,7 +262,7 @@ Thus, while information can not travel backwards in time, still, vsh on top of a
 # Training
 ## Desired behavior
 Every ~32ms, the LSTM is given information about the current frequency distribution of incoming sounds.
-We want it to returns the probabilities that the world is in each of a finite set of possible state.
+We want it to return the probabilities that the world is in each of a finite set of possible state.
 
 When we speak of world state in this context, we usually mean states such as "The user is currently telling the machine to play the music", or "The user is not telling the machine to do anything."
 However Aural2 is extensible to any set of world states about which audio frequency distribution gives information.
@@ -293,7 +293,7 @@ A new MFCC arrives, and this time, it does not contain much white noise and inst
 Assuming that the only intent which starts with a few steps of while noise followed by the "l" phoneme is the `PlayMusic` intent, we would like the LSTM to start to output a value close to 1 for state 1 of its output.
 At this point, vsh, having received the `PlayMusic` intent with greater than 0.9 confidence, will start to play the music.
 As the user continues speaking the word "play", we want the LSTM to continue to output a high value for state 1.
-But as soon as the LSTM receives an MFCC of silents, we want it to go back to outputting a value close to 1 for state 0, and close to 0 for every other state.
+But as soon as the LSTM receives an MFCC of silence, we want it to go back to outputting a value close to 1 for state 0, and close to 0 for every other state.
 
 This is the behavior which we would like the LSTM to exhibit.
 While it would perhaps be possible to code such behavior by hand, it would be tedious, and likely inaccurate.
@@ -378,14 +378,14 @@ updating the weights and biases.
 
 In this way, the training loop is always supplied with a buffer of mini
 batches randomly drawn from a recent state of the training data, and
-training data preparation is free to hog CPU resources while the train
+training data preparation is free to fully utilize CPU resources while the train
 loop is blocked by the GPU doing training.
 
 It should be reiterated that the graph used for performing inference on
 incoming audio, the graph for performing batch inference on whole audio
 clips for visualizations, and the training graph, while distinct graphs,
 share a single set of variables. The weight and bias variables are
-updated by the training graph, and the accuracy with which aural2
+updated by the training graph, and the accuracy with which Aural2
 classifies the state of the world increases. The variables stay on the
 GPU, or whatever compute device TensorFlow has decided to use, and need
 never leave. TensorFlow transparently handles locking to ensure that the
