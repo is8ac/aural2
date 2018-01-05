@@ -21,6 +21,7 @@ func startVsh(
 	saveClip func(*libaural2.AudioClip),
 	stepInferenceFuncs map[libaural2.VocabName]func(*tf.Tensor) ([]float32, error),
 	beforeShutdown func(),
+	bbHost string,
 ) (
 	dump func() *libaural2.AudioClip,
 ) {
@@ -53,7 +54,7 @@ func startVsh(
 	var micWorks = false
 	eb := vsh.NewEventBroker(resultChan)
 	// try to connect to the Intu blackboard.
-	bb, err := self.Init("localhost", "aural2")
+	bb, err := self.Init(bbHost, "aural2")
 	if err == nil {
 		eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "intu_play", vsh.Action{
 			MinActivationProb: 0.9,

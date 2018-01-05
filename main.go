@@ -123,8 +123,12 @@ func main() {
 		logger.Println("models saved, shutting down now.")
 		os.Exit(0)
 	}
+	intuHostName := os.Getenv("INTUHOST")
+	if intuHostName == "" {
+		intuHostName = "intu"
+	}
 	// start vsh, passing it the step
-	dumpClip := startVsh(saveFunc, stepInferenceFuncs, shutdownFunc)
+	dumpClip := startVsh(saveFunc, stepInferenceFuncs, shutdownFunc, intuHostName)
 	// start the http server and REST API.
 	go serve(db, onlineSessions, namesPrs, dumpClip, tdmMap)
 	for { // endless loop of saving the models every 10 minutes.
