@@ -1,3 +1,4 @@
+# Descended from https://github.com/sherjilozair/char-rnn-tensorflow
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
@@ -20,10 +21,10 @@ def main():
             "batch_size": 7,
             "dropout": 0.0,
             "embedding_size": 0,
-            "hidden_size": 256,
+            "hidden_size": 64,
             "input_dropout": 0.0,
             "input_size": 13,
-            "learning_rate": 0.0005,
+            "learning_rate": 0.0003,
             "max_grad_norm": 5.0,
             "num_layers": 2,
             "num_unrollings": 100,

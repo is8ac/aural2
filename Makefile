@@ -1,5 +1,5 @@
 SYSTEM_ARCH := $(shell uname -m | sed 's/\(...\).*/\1/')
-VERSION=1.0.1
+VERSION=0.2.0
 
 REGISTRY=summit.hovitos.engineering
 ifeq ($(SYSTEM_ARCH),arm)
@@ -37,5 +37,12 @@ clean-dockerimages: clean
 	docker rmi $(REG_PATH)/aural2:latest
 
 run: target/dockerimage
+	mkdir /tmp/aural2
 	touch /tmp/aural2/label_store.db
 	docker run -it -p 48125:48125 --privileged -v /tmp/aural2/audio:/audio -v /tmp/aural2/label_store.db:/label_store.db summit.hovitos.engineering/x86/aural2
+
+release: target/aural2
+	hub
+
+gopherjs_loop:
+	while inotifywait -e close_write webgui/main.go; do gopherjs build -o webgui/static/main.js webgui/main.go; done;

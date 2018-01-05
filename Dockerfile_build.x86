@@ -36,6 +36,8 @@ RUN go get \
   github.com/gorilla/mux \
   github.com/lucasb-eyer/go-colorful \
   github.com/hajimehoshi/oto \
-  honnef.co/go/js/xhr
+  honnef.co/go/js/xhr \
+  github.com/open-horizon/self-go-sdk/self \
+  github.com/satori/go.uuid
 
 RUN cd /root/go/src/github.com/tensorflow/tensorflow && git checkout v1.4.0

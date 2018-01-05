@@ -37,7 +37,7 @@ body {
 }
 
 #spectrogram{
-  height: 50%;
+  height: 30%;
 }
 #mfcc{
   height: 10%;
@@ -52,11 +52,14 @@ body {
 }
 
 #probs {
-  height: 25%;
+  height: 10%;
 }
 
 #argmax {
   height: 5%;
+}
+#states {
+  height: 35%;
 }
 .label{
   width: 5px;

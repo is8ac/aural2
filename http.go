@@ -341,6 +341,10 @@ func serve(
 	if err != nil {
 		logger.Fatalln(err)
 	}
+	renderStates, err := makeRenderLSTMstate(onlineSessions)
+	if err != nil {
+		logger.Fatalln(err)
+	}
 	serializeLabelSet := func(labelSet libaural2.LabelSet) (serialized []byte, err error) {
 		serialized, err = labelSet.Serialize()
 		return
@@ -363,6 +367,7 @@ func serve(
 	r.HandleFunc("/images/mfcc/{vocab}/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderMFCC))
 	r.HandleFunc("/images/probs/{vocab}/{sampleID}.jpeg", makeServeAudioDerivedBlob(renderProbs))
 	r.HandleFunc("/images/argmax/{vocab}/{sampleID}.png", makeServeAudioDerivedBlob(renderArgmaxedStates))
+	r.HandleFunc("/images/states/{vocab}/{sampleID}.png", makeServeAudioDerivedBlob(renderStates))
 	r.HandleFunc("/images/labelset/{vocab}/{sampleID}.png", makeServeLabelsSetDerivedBlob(namesPrs, db.GetLabelSet, renderColorLabelSetImage))
 	r.HandleFunc("/audio/{vocab}/{sampleID}.wav", makeServeAudioDerivedBlob(computeWav))
 	r.HandleFunc("/tagui/{vocab}/{sampleID}", makeServeTagUI(namesPrs))

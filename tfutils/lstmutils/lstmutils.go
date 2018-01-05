@@ -2,10 +2,16 @@
 package lstmutils
 
 import (
+	"bytes"
 	"errors"
+	"image"
+	"image/color"
+	"image/png"
 	"log"
 	"os"
+	"sync"
 
+	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tftrain"
 
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
@@ -136,6 +142,7 @@ func MakeStepInference(oSession tftrain.OnlineSess) (stepInference func(*tf.Tens
 	if err != nil {
 		return
 	}
+	//slicePngBytes :=
 	fetches = append(fetches, output) // also pull on output
 	stepInference = func(mfccTensor *tf.Tensor) (probs []float32, err error) {
 		feeds[input] = mfccTensor // feed the input
@@ -151,6 +158,69 @@ func MakeStepInference(oSession tftrain.OnlineSess) (stepInference func(*tf.Tens
 			feeds[ph] = results[i]
 		}
 		probs = results[len(fetches)-1].Value().([][]float32)[0]
+		return
+	}
+	return
+}
+
+func MakeRenderLSTMstate(oSession *tftrain.OnlineSess) (renderLSTMstate func(*tf.Tensor) ([]byte, error), err error) {
+	input, output, placeholders, fetches, feeds, err := LoadGraph(oSession.Graph, oSession.Sess, "step_inference")
+	if err != nil {
+		return
+	}
+	mutex := &sync.Mutex{}
+	fetches = append(fetches, output) // also pull on output
+	renderLSTMstate = func(mfccsTensor *tf.Tensor) (imageBytes []byte, err error) {
+		mutex.Lock()
+		defer mutex.Unlock()
+		mfccs := mfccsTensor.Value().([][][]float32) // we must regrettable parse the MFCC back into a Go value so that we can more easily slice it up.
+		states := make([][]float32, libaural2.StridesPerClip)
+		results := []*tf.Tensor{}
+		for i, mfcc := range mfccs[0] {
+			feeds[input], err = tf.NewTensor([][][]float32{[][]float32{mfcc}})
+			if err != nil {
+				logger.Println(err)
+				return
+			}
+			results, err = oSession.Sess.Run(
+				feeds,
+				fetches,
+				nil,
+			)
+			if err != nil {
+				logger.Println(err)
+				return
+			}
+			for p, ph := range placeholders {
+				feeds[ph] = results[p]
+			}
+			states[i] = append(results[1].Value().([][]float32)[0], results[3].Value().([][]float32)[0]...)
+		}
+		image := image.NewRGBA(image.Rect(0, 0, libaural2.StridesPerClip, len(states[0])))
+		for x := range states {
+			for y := range states[x] {
+				if states[x][y] > 0 {
+					state := states[x][y] * 255
+					//state := math.Sqrt(float64(states[x][y] * 100))
+					if state > 255 {
+						state = 255
+					}
+					image.Set(x, y, color.RGBA{A: 255, R: uint8(state)})
+				} else {
+					state := states[x][y] * -255
+					//state := math.Sqrt(float64(states[x][y] * -100))
+					if state > 255 {
+						state = 255
+					}
+					image.Set(x, y, color.RGBA{A: 255, G: uint8(state)})
+				}
+			}
+		}
+		buff := bytes.Buffer{}
+		if err = png.Encode(&buff, image); err != nil {
+			return
+		}
+		imageBytes = buff.Bytes()
 		return
 	}
 	return
