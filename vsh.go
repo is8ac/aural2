@@ -116,7 +116,7 @@ func startVsh(
 				}
 			},
 		})
-		eb.Register(intent.Vocabulary.Name, intent.SkipSong, "intu_pause", vsh.Action{
+		eb.Register(intent.Vocabulary.Name, intent.SkipSong, "intu_skip", vsh.Action{
 			MinActivationProb: 0.9,
 			MaxResetProb:      0.2,
 			TimeLastCalled:    time.Now(),
@@ -131,15 +131,15 @@ func startVsh(
 					Type:        "IThing",
 					DataType:    "voice_intent",
 					CreateTime:  float64(time.Now().Unix()),
-					Text:        "pause_music",
+					Text:        "skip_music",
 					Confidence:  float64(prob),
-					Info:        "pause_music",
-					Name:        "pause_music",
+					Info:        "skip_music",
+					Name:        "skip_music",
 					State:       "ADDED",
 					ECategory:   self.ThingCategoryPERCEPTION,
 					FImportance: 1,
 					FLifeSpan:   3600,
-					Data:        map[string]string{"intent": "pause_music"},
+					Data:        map[string]string{"intent": "skip_music"},
 				}
 				if err := bb.Pub(self.TargetBlackboard, thing); err != nil {
 					logger.Println(err)
