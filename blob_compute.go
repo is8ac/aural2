@@ -7,6 +7,7 @@ import (
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils"
+	"github.ibm.com/Blue-Horizon/aural2/tfutils/lstmutils"
 	"github.ibm.com/Blue-Horizon/aural2/tftrain"
 	"image"
 	"bytes"
@@ -177,6 +178,42 @@ func makeRenderArgmaxedStates(
 			return
 		}
 		imageBytes = buff.Bytes()
+		return
+	}
+	return
+}
+
+func makeRenderLSTMstate(
+	onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess,
+	) (
+		renderState func(*libaural2.AudioClip, libaural2.VocabName) ([]byte, error),
+		err error,
+		) {
+	audioClipToMFCCtensor, err := tfutils.MakeAudioClipToMFCCtensor()
+	if err != nil {
+		return
+	}
+	renderLSTMstatesMap := map[libaural2.VocabName]func(*tf.Tensor)([]byte, error){}
+	for vocab, oSess := range onlineSessions {
+		renderLSTMstatesMap[vocab], err = lstmutils.MakeRenderLSTMstate(oSess)
+		if err != nil {
+			return
+		}
+	}
+	renderState = func(clip *libaural2.AudioClip, vocabName libaural2.VocabName) (imageBytes []byte, err error) {
+		renderStates, prs := renderLSTMstatesMap[vocabName]
+		if !prs {
+			err = errors.New("don't have renderLSTMstates for " + string(vocabName))
+			return
+		}
+		mfccTensor, err := audioClipToMFCCtensor(clip)
+		if err != nil {
+			return
+		}
+		imageBytes, err = renderStates(mfccTensor)
+		if err != nil {
+			return
+		}
 		return
 	}
 	return

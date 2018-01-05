@@ -105,10 +105,19 @@ func reloadProbs() {
 	probsSrc := probs.Src
 	argmax := d.GetElementByID("argmax").(*dom.HTMLImageElement)
 	argmaxSrc := argmax.Src
+	states := d.GetElementByID("states").(*dom.HTMLImageElement)
+	statesSrc := states.Src
 	for {
-		time.Sleep(500 * time.Millisecond)
-		probs.Set("src", probsSrc+"?"+time.Now().String())
-		argmax.Set("src", argmaxSrc+"?"+time.Now().String())
+		time.Sleep(1000 * time.Millisecond)
+		if probs.Complete {
+			probs.Set("src", probsSrc+"?"+time.Now().String())
+		}
+		if argmax.Complete {
+			argmax.Set("src", argmaxSrc+"?"+time.Now().String())
+		}
+		if states.Complete {
+			states.Set("src", statesSrc+"?"+time.Now().String())
+		}
 		print("loading")
 	}
 }
@@ -235,7 +244,7 @@ func start() {
 }
 
 func main() {
-	fmt.Println("Audio vis GUI version 0.1.3")
+	fmt.Println("Audio vis GUI version 0.1.5")
 	w := dom.GetWindow()
 	w.AddEventListener("DOMContentLoaded", true, func(event dom.Event) {
 		go start()

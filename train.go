@@ -141,7 +141,7 @@ func trainLoop(vocabName libaural2.VocabName, oSess *tftrain.OnlineSess, miniBat
 		if i % 10 == 0 {
 			logger.Println(vocabName, loss)
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		i++
 	}
 }

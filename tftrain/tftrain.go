@@ -369,7 +369,6 @@ func NewOnlineSess(
 	if err != nil {
 		return
 	}
-	logger.Println(initOP.Type())
 	sess, err := tf.NewSession(graph, nil)
 	if err != nil {
 		return
