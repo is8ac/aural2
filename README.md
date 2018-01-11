@@ -6,7 +6,7 @@ If on x86_64:
 ```
 docker run -it -p 48125:48125 --privileged summit.hovitos.engineering/x86_64/aural2
 ```
-or if an on odroid-c2, Jetson Tx2, or other aarch64 machines:
+or if on an odroid-c2, Jetson Tx2, or other aarch64 machines:
 ```
 docker run -it -p 48125:48125 --privileged summit.hovitos.engineering/aarch64/aural2
 ```
@@ -112,7 +112,7 @@ Refresh the index page, and label the new sample using the 'p' key for the `play
 
 For a complete list of intents and key bindings, see `vsh/intent/intent.go`
 
-Replete until aural2 does your bidding consistently.
+Repeat until aural2 does your bidding consistently.
 
 Trained models are written to disk every 10 minutes.
 If you wish to save models before terminating aural2, call the `/savemodels`.
