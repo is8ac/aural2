@@ -13,12 +13,13 @@ import (
 
 	"encoding/base32"
 
+	"os"
+
 	"github.com/gorilla/mux"
 	"github.ibm.com/Blue-Horizon/aural2/boltstore"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tftrain"
 	"github.ibm.com/Blue-Horizon/aural2/urbitname"
-	"os"
 )
 
 func parseURLvar(urlVar string) (clipID libaural2.ClipID, err error) {
@@ -239,9 +240,9 @@ func makeServeVocabUI(vocabPrs map[libaural2.VocabName]bool) func(http.ResponseW
 		}
 		var tmpl = template.Must(template.ParseFiles("webgui/templates/vocab.html"))
 		params := struct {
-			VocabName     libaural2.VocabName
+			VocabName libaural2.VocabName
 		}{
-			VocabName:     vocabName,
+			VocabName: vocabName,
 		}
 		err := tmpl.Execute(w, params)
 		if err != nil {
@@ -252,8 +253,7 @@ func makeServeVocabUI(vocabPrs map[libaural2.VocabName]bool) func(http.ResponseW
 	}
 }
 
-
-func makeSampleHandler(putClipID func(libaural2.ClipID) error, dump func()*libaural2.AudioClip) func(http.ResponseWriter, *http.Request) {
+func makeSampleHandler(putClipID func(libaural2.ClipID) error, dump func() *libaural2.AudioClip) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		audioClip := dump()
 		id := audioClip.ID()
@@ -294,6 +294,25 @@ func makeSaveModel(onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess) f
 	}
 }
 
+func makeSetSleepms(sleepms *int32) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			logger.Println(err)
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+		num, err := strconv.Atoi(string(data))
+		if err != nil {
+			logger.Println(err)
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+		logger.Println("setting sleep time to", num, "ms")
+		*sleepms = int32(num)
+		return
+	}
+}
 
 func renderColorLabelSetImage(labelSet libaural2.LabelSet) (pngBytes []byte, err error) {
 	image := image.NewRGBA(image.Rect(0, 0, libaural2.StridesPerClip, 1))
@@ -315,8 +334,9 @@ func serve(
 	db boltstore.DB,
 	onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess,
 	namesPrs map[libaural2.VocabName]bool,
-	dumpClip func()*libaural2.AudioClip,
+	dumpClip func() *libaural2.AudioClip,
 	tdmMap map[libaural2.VocabName]*trainingDataMaps,
+	sleepms *int32,
 ) {
 	defer db.Close()
 	makeServeAudioDerivedBlob := makeMakeServeAudioDerivedBlob(namesPrs)
@@ -349,7 +369,7 @@ func serve(
 		serialized, err = labelSet.Serialize()
 		return
 	}
-	putLabelSets := func(labelSet libaural2.LabelSet) (err error){
+	putLabelSets := func(labelSet libaural2.LabelSet) (err error) {
 		err = db.PutLabelSet(labelSet)
 		if err != nil {
 			return
@@ -375,6 +395,7 @@ func serve(
 	r.HandleFunc("/labelsset/{vocab}/{sampleID}", makeWriteLabelsSet(putLabelSets, namesPrs)).Methods("POST")
 	r.HandleFunc("/labelsset/{vocab}/{sampleID}", makeServeLabelsSetDerivedBlob(namesPrs, db.GetLabelSet, serializeLabelSet)).Methods("GET")
 	r.HandleFunc("/saveclip", makeSampleHandler(db.PutClipID, dumpClip))
+	r.HandleFunc("/sleepms", makeSetSleepms(sleepms))
 	r.HandleFunc("/savemodels", makeSaveModel(onlineSessions))
 	fs := http.FileServer(http.Dir("webgui/static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))

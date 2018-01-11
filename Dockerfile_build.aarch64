@@ -1,0 +1,47 @@
+FROM arm64v8/ubuntu:17.10
+
+RUN apt-get update && apt-get install -y \
+  curl \
+  git \
+  build-essential \
+  libasound2-dev \
+  python-pip
+
+RUN curl -L \
+"https://dl.google.com/go/go1.9.2.linux-arm64.tar.gz" | \
+tar -C /usr/local -xz
+
+RUN curl -L \
+"http://1dd40.http.dal05.cdn.softlayer.net/arm_artifacts/libtensorflow-cpu-linux-aarch64-1.5.0-rc0.tar.gz" | \
+tar -C /usr/local -xz
+
+RUN apt-get install -y wget
+
+RUN wget http://1dd40.http.dal05.cdn.softlayer.net/arm_artifacts/tensorflow-1.5.0rc0-cp27-cp27mu-linux_aarch64.whl
+RUN pip install tensorflow-1.5.0rc0-cp27-cp27mu-linux_aarch64.whl
+
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPATH=/root/go
+
+ENV LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib
+
+
+# go deps for tf
+RUN go get \
+  github.com/tensorflow/tensorflow/tensorflow/go \
+  github.com/gopherjs/gopherjs \
+  github.com/gopherjs/websocket/websocketjs \
+  honnef.co/go/js/dom \
+  github.com/boltdb/bolt \
+  github.com/faiface/beep \
+  github.com/faiface/beep/wav \
+  github.com/fhs/gompd/mpd \
+  github.com/golang/protobuf/proto \
+  github.com/gorilla/mux \
+  github.com/lucasb-eyer/go-colorful \
+  github.com/hajimehoshi/oto \
+  honnef.co/go/js/xhr \
+  github.com/open-horizon/self-go-sdk/self \
+  github.com/satori/go.uuid
+
+RUN cd /root/go/src/github.com/tensorflow/tensorflow && git checkout r1.5

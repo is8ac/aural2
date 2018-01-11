@@ -13,14 +13,13 @@ import (
 	"github.ibm.com/Blue-Horizon/aural2/tftrain"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils/lstmutils"
 	"github.ibm.com/Blue-Horizon/aural2/vsh/intent"
-	"github.ibm.com/Blue-Horizon/aural2/vsh/word"
 )
 
 var logger = log.New(os.Stdout, "arl2: ", log.Lshortfile)
 
 func main() {
 	vocabList := []*libaural2.Vocabulary{
-		&word.Vocabulary,
+		//&word.Vocabulary,
 		&intent.Vocabulary,
 	}
 	vocabs := map[libaural2.VocabName]*libaural2.Vocabulary{}                           // map to get the vocabulary struct
@@ -98,7 +97,9 @@ func main() {
 			return
 		}
 	}
-	tdmMap, err := startTrainingLoops(db, onlineSessions)
+	sleepms := new(int32)
+	*sleepms = int32(300)
+	tdmMap, err := startTrainingLoops(db, onlineSessions, sleepms)
 	if err != nil {
 		logger.Fatalln(err)
 	}
@@ -130,7 +131,7 @@ func main() {
 	// start vsh, passing it the step
 	dumpClip := startVsh(saveFunc, stepInferenceFuncs, shutdownFunc, intuHostName)
 	// start the http server and REST API.
-	go serve(db, onlineSessions, namesPrs, dumpClip, tdmMap)
+	go serve(db, onlineSessions, namesPrs, dumpClip, tdmMap, sleepms)
 	for { // endless loop of saving the models every 10 minutes.
 		time.Sleep(10 * time.Minute)
 		for vocabName, oSess := range onlineSessions {

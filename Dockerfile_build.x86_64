@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM ubuntu:17.10
 
 RUN apt-get update && apt-get install -y \
   curl \
@@ -7,14 +7,14 @@ RUN apt-get update && apt-get install -y \
   libasound2-dev \
   python-pip
 
-RUN pip install tensorflow
+RUN pip install tensorflow==1.5.0rc0
 
 RUN curl -L \
 "https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz" | \
 tar -C /usr/local -xz
 
 RUN curl -L \
-"https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-cpu-linux-x86_64-1.4.0.tar.gz" | \
+"https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-cpu-linux-x86_64-1.5.0-rc0.tar.gz" | \
 tar -C /usr/local -xz
 
 ENV PATH="/usr/local/go/bin:${PATH}"
@@ -40,4 +40,4 @@ RUN go get \
   github.com/open-horizon/self-go-sdk/self \
   github.com/satori/go.uuid
 
-RUN cd /root/go/src/github.com/tensorflow/tensorflow && git checkout v1.4.0
+RUN cd /root/go/src/github.com/tensorflow/tensorflow && git checkout r1.5

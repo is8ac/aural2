@@ -1,16 +1,17 @@
 package main
 
 import (
+	"errors"
+	"math/rand"
+	"sync"
+	"time"
+
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 	"github.com/tensorflow/tensorflow/tensorflow/go/op"
 	"github.ibm.com/Blue-Horizon/aural2/boltstore"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/tftrain"
 	"github.ibm.com/Blue-Horizon/aural2/tfutils"
-	"math/rand"
-	"sync"
-	"time"
-	"errors"
 )
 
 type trainParams struct {
@@ -40,7 +41,7 @@ func newTrainingDataMap(
 		clipToMFCC:   clipToMFCC,
 		getAudioClip: getAudioClip,
 		getLabelSet:  getLabelSet,
-		vocabName: vocabName,
+		vocabName:    vocabName,
 	}
 	return
 }
@@ -104,7 +105,7 @@ func (td *trainingDataMaps) makeMiniBatch() (mb miniBatch, err error) {
 	return
 }
 
-func startTrainingLoops(db boltstore.DB, onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess)(tdmMap map[libaural2.VocabName]*trainingDataMaps, err error) {
+func startTrainingLoops(db boltstore.DB, onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess, sleepms *int32) (tdmMap map[libaural2.VocabName]*trainingDataMaps, err error) {
 	tdmMap = map[libaural2.VocabName]*trainingDataMaps{}
 	for vocabName, oSess := range onlineSessions {
 		tdm := &trainingDataMaps{}
@@ -114,7 +115,7 @@ func startTrainingLoops(db boltstore.DB, onlineSessions map[libaural2.VocabName]
 		}
 		tdmMap[vocabName] = tdm
 		mbChan := startTrainingDataLoop(vocabName, tdm)
-		go trainLoop(vocabName, oSess, mbChan)
+		go trainLoop(vocabName, oSess, mbChan, sleepms)
 		labelSets, err := db.GetAllLabelSets(vocabName)
 		if err != nil {
 			logger.Fatalln(err)
@@ -126,7 +127,7 @@ func startTrainingLoops(db boltstore.DB, onlineSessions map[libaural2.VocabName]
 	return
 }
 
-func trainLoop(vocabName libaural2.VocabName, oSess *tftrain.OnlineSess, miniBatchChan chan miniBatch) {
+func trainLoop(vocabName libaural2.VocabName, oSess *tftrain.OnlineSess, miniBatchChan chan miniBatch, sleepms *int32) {
 	if vocabName == libaural2.VocabName("word") {
 		logger.Println("not training word vocab")
 		return
@@ -138,10 +139,10 @@ func trainLoop(vocabName libaural2.VocabName, oSess *tftrain.OnlineSess, miniBat
 		if err != nil {
 			logger.Fatal(err)
 		}
-		if i % 10 == 0 {
+		if i%10 == 0 {
 			logger.Println(vocabName, loss)
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(time.Duration(*sleepms) * time.Millisecond)
 		i++
 	}
 }

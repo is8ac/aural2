@@ -1,3 +1,7 @@
 python/*
 label_serve
 tftrain/*
+models*
+audio/*
+aural_rs/*
+.git/*

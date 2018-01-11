@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM ubuntu:17.10
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates \
@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   alsa-utils
 
 RUN curl -L \
-  "https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-cpu-linux-x86_64-1.4.0.tar.gz" | \
+  "https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-cpu-linux-x86_64-1.5.0-rc0.tar.gz" | \
   tar -C /usr/local -xz
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
