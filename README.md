@@ -1,22 +1,30 @@
 # aural2
 LSTM based speech command recognition.
 
+# Run
+If on x86_64:
+```
+docker run -it -p 48125:48125 --privileged summit.hovitos.engineering/x86_64/aural2
+```
+or if an on odroid-c2, Jetson Tx2, or other aarch64 machines:
+```
+docker run -it -p 48125:48125 --privileged summit.hovitos.engineering/aarch64/aural2
+```
+
+If you want persistence, include `-v /tmp/aural2/audio:/audio -v /tmp/aural2/label_store.db:/label_store.db -v /tmp/aural2/models:/models`, replacing `/tmp/aural2` with some persistent directory on the host.
+Be sure to `touch` /tmp/aural2/label_store.db before mounting it in docker, otherwise docker will create a directory.
+
 # build
 ## With docker
 ```
 make
 ```
-This will build inside a build docker container, and place the artifacts in a run container.
-
-To run:
-```
-docker run -it -p 48125:48125 --privileged summit.hovitos.engineering/x86/aural2
-```
+This will build inside a build container, and place the artifacts in a run container.
 
 ## Directly on host
 
 ### Dependencies
-- Python Tensorflow:
+- Python Tensorflow (build):
 ```
 pip install tensorflow
 ```
@@ -116,7 +124,7 @@ You can also train the `ShutDown` intent, which will write models to disk before
 
 # Caveats:
 - When running in docker, vsh cannot connect to mpd. It will fall back to just printing its actions.
-- Currently only tested on x86 Linux. Will probably work OSX, or Linux on ARM, but has not been tested.
+- Currently only tested on x86_64 and aarch64 Linux. Will probably work OSX, or Linux on armhf, but has not been tested.
 
 To reduce TensorFlow logging:
 ```
@@ -149,8 +157,6 @@ These actual outputs are subtracted from what I have defined as the target outpu
 The difference squared is used as the loss, and is back propagated over the variables in the model, updating them slightly.
 
 Training with batch size of 7, and 100 cells unrolled, therefore takes an float32 input of shape `[7, 100, 13]`, and an int32 target of shape `[7, 100]`.
-
-Running on a GTX 1060, training for 3000 mini batches, takes ~2.5 minutes, producing a 5.4MB model.
 
 vsh is a wrapper lib around the LSTM.
 It maintains a 10 second ring buffer of audio, allowing the last 10 seconds of audio to be written to disk when needed.

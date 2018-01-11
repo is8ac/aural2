@@ -3,9 +3,8 @@ package main
 import (
 	"time"
 
-	"github.com/faiface/beep"
-	"github.com/faiface/beep/speaker"
-	"github.com/faiface/beep/wav"
+	"os"
+
 	"github.com/fhs/gompd/mpd"
 	"github.com/open-horizon/self-go-sdk/self"
 	"github.com/satori/go.uuid"
@@ -13,8 +12,6 @@ import (
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/vsh"
 	"github.ibm.com/Blue-Horizon/aural2/vsh/intent"
-	"github.ibm.com/Blue-Horizon/aural2/vsh/word"
-	"os"
 )
 
 func startVsh(
@@ -50,8 +47,8 @@ func startVsh(
 	if err != nil {
 		panic(err)
 	}
-	var speakerWorks = false
-	var micWorks = false
+	//var speakerWorks = false
+	//var micWorks = false
 	eb := vsh.NewEventBroker(resultChan)
 	// try to connect to the Intu blackboard.
 	bb, err := self.Init(bbHost, "aural2")
@@ -174,30 +171,30 @@ func startVsh(
 			logger.Println("saved clip:", clip.ID())
 		},
 	})
-	eb.Register(word.Vocabulary.Name, word.Hello, "sound_test", vsh.MakeDefaultAction(func() {
-		speakerWorks = true
-		micWorks = true
-		logger.Println("Sound works")
-		eb.Unregister(word.Vocabulary.Name, word.Hello, "sound_test")
-	}))
+	//eb.Register(word.Vocabulary.Name, word.Hello, "sound_test", vsh.MakeDefaultAction(func() {
+	//	speakerWorks = true
+	//	micWorks = true
+	//	logger.Println("Sound works")
+	//	eb.Unregister(word.Vocabulary.Name, word.Hello, "sound_test")
+	//}))
 
-	go func() {
-		time.Sleep(2 * time.Second)
-		// now start playing audio.
-		f, err := os.Open("webgui/static/hello.wav")
-		if err != nil {
-			logger.Println(err)
-		}
-		s, format, err := wav.Decode(f)
-		if err != nil {
-			logger.Println(err)
-		}
-		speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
-		speaker.Play(beep.Seq(s, beep.Callback(func() {
-			if !speakerWorks {
-				logger.Println("no speaker")
-			}
-		})))
-	}()
+	//go func() {
+	//	time.Sleep(2 * time.Second)
+	//	// now start playing audio.
+	//	f, err := os.Open("webgui/static/hello.wav")
+	//	if err != nil {
+	//		logger.Println(err)
+	//	}
+	//	s, format, err := wav.Decode(f)
+	//	if err != nil {
+	//		logger.Println(err)
+	//	}
+	//	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+	//	speaker.Play(beep.Seq(s, beep.Callback(func() {
+	//		if !speakerWorks {
+	//			logger.Println("no speaker")
+	//		}
+	//	})))
+	//}()
 	return
 }

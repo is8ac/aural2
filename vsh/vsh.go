@@ -118,7 +118,9 @@ func Init(
 	}
 	buf := make([]byte, libaural2.StrideWidth*2)
 	go func() {
+		var iters int
 		for {
+			iters++
 			n, err := reader.Read(buf)
 			if err != nil {
 				logger.Println(err)
@@ -153,7 +155,7 @@ func Init(
 // MakeDefaultAction wraps a func() in an Action with sane defaults.
 func MakeDefaultAction(run func()) (action Action) {
 	action = Action{
-		MinActivationProb: 0.95, // To decrease false positives, increase. To decrease false negatives, lower.
+		MinActivationProb: 0.90, // To decrease false positives, increase. To decrease false negatives, lower.
 		MaxResetProb:      0.2,  // To decrease duplicate calls, lower.
 		HandlerFunction: func(prob float32) {
 			run()
