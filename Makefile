@@ -31,7 +31,7 @@ target/builddockerimage: Dockerfile_build.$(SYSTEM_ARCH)
 	docker build -t aural2_build -f Dockerfile_build.$(SYSTEM_ARCH) .
 	touch target/builddockerimage
 
-push: dockerimagesquash
+push: target/dockerimage
 	docker push $(REG_PATH)/aural2:latest
 
 clean:
