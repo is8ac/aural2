@@ -82,7 +82,7 @@ Refresh the index page. You should now see a link. Click on it.
 
 You should see spectrogram of the audio. This is the labeling UI.
 To play and pause use the space bar.
-To navigate foreword and back use arrow keys.
+To navigate forward and back use arrow keys.
 Up / Down for large movements, Left / Right for small.
 
 To label the audio, position the red cursor at the beginning of the utterance.
@@ -115,12 +115,21 @@ For a complete list of intents and key bindings, see `vsh/intent/intent.go`
 Repeat until aural2 does your bidding consistently.
 
 Trained models are written to disk every 10 minutes.
-If you wish to save models before terminating aural2, call the `/savemodels`.
+If you wish to save models before terminating aural2, call the `/savemodels` API.
 ```
 curl http://localhost:48125/savemodels
 ```
 
 You can also train the `ShutDown` intent, which will write models to disk before terminating.
+
+By default, Aural2 will sleep for 300 ms between each training mini batch so as to not starve the other applications running on the same hardware of CPU time.
+But if you do not care about starving other applications of CPU, you can change the sleep time with the `/sleepms` REST API.
+For example, to tell Aural2 to sleep for only 5 ms each iteration:
+```
+curl -X POST -d "5" http://<ipaddr>:48125/sleepms
+```
+Note this setting does not persist across restarts, so you will need to call this API each time you start Aural2 and want to train fast.
+
 
 # Caveats:
 - When running in docker, vsh cannot connect to mpd. It will fall back to just printing its actions.
