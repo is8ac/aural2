@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"time"
 
 	"os"
@@ -42,7 +43,6 @@ func startVsh(
 			}
 		}()
 	}
-
 	resultChan, dump, err := vsh.Init(os.Stdin, stepInferenceFuncs)
 	if err != nil {
 		panic(err)
@@ -50,102 +50,106 @@ func startVsh(
 	//var speakerWorks = false
 	//var micWorks = false
 	eb := vsh.NewEventBroker(resultChan)
-	// try to connect to the Intu blackboard.
-	bb, err := self.Init(bbHost, "aural2")
-	if err == nil {
-		eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "intu_play", vsh.Action{
-			MinActivationProb: 0.9,
-			MaxResetProb:      0.2,
-			TimeLastCalled:    time.Now(),
-			HandlerFunction: func(prob float32) {
-				guid, err := uuid.NewV4()
-				if err != nil {
-					logger.Println(err)
-					return
-				}
-				thing := self.Thing{
-					GUID:        guid.String(),
-					Type:        "IThing",
-					DataType:    "voice_intent",
-					CreateTime:  float64(time.Now().Unix()),
-					Text:        "play_music",
-					Confidence:  float64(prob),
-					Info:        "play_music",
-					Name:        "play_music",
-					State:       "ADDED",
-					ECategory:   self.ThingCategoryPERCEPTION,
-					FImportance: 1,
-					FLifeSpan:   3600,
-					Data:        map[string]string{"intent": "play_music"},
-				}
-				logger.Println("publishing play")
-				if err := bb.Pub(self.TargetBlackboard, thing); err != nil {
-					logger.Println(err)
-				}
-			},
-		})
-		eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "intu_pause", vsh.Action{
-			MinActivationProb: 0.9,
-			MaxResetProb:      0.2,
-			TimeLastCalled:    time.Now(),
-			HandlerFunction: func(prob float32) {
-				guid, err := uuid.NewV4()
-				if err != nil {
-					logger.Println(err)
-					return
-				}
-				thing := self.Thing{
-					GUID:        guid.String(),
-					Type:        "IThing",
-					DataType:    "voice_intent",
-					CreateTime:  float64(time.Now().Unix()),
-					Text:        "pause_music",
-					Confidence:  float64(prob),
-					Info:        "pause_music",
-					Name:        "pause_music",
-					State:       "ADDED",
-					ECategory:   self.ThingCategoryPERCEPTION,
-					FImportance: 1,
-					FLifeSpan:   3600,
-					Data:        map[string]string{"intent": "pause_music"},
-				}
-				if err := bb.Pub(self.TargetBlackboard, thing); err != nil {
-					logger.Println(err)
-				}
-			},
-		})
-		eb.Register(intent.Vocabulary.Name, intent.SkipSong, "intu_skip", vsh.Action{
-			MinActivationProb: 0.9,
-			MaxResetProb:      0.2,
-			TimeLastCalled:    time.Now(),
-			HandlerFunction: func(prob float32) {
-				guid, err := uuid.NewV4()
-				if err != nil {
-					logger.Println(err)
-					return
-				}
-				thing := self.Thing{
-					GUID:        guid.String(),
-					Type:        "IThing",
-					DataType:    "voice_intent",
-					CreateTime:  float64(time.Now().Unix()),
-					Text:        "skip_music",
-					Confidence:  float64(prob),
-					Info:        "skip_music",
-					Name:        "skip_music",
-					State:       "ADDED",
-					ECategory:   self.ThingCategoryPERCEPTION,
-					FImportance: 1,
-					FLifeSpan:   3600,
-					Data:        map[string]string{"intent": "skip_music"},
-				}
-				if err := bb.Pub(self.TargetBlackboard, thing); err != nil {
-					logger.Println(err)
-				}
-			},
-		})
+	if os.Getenv("CONNECT_TO_INTU") == "true" {
+		// try to connect to the Intu blackboard.
+		bb, err := self.Init(bbHost, "aural2")
+		if err == nil {
+			eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "intu_play", vsh.Action{
+				MinActivationProb: 0.9,
+				MaxResetProb:      0.2,
+				TimeLastCalled:    time.Now(),
+				HandlerFunction: func(prob float32) {
+					guid, err := uuid.NewV4()
+					if err != nil {
+						logger.Println(err)
+						return
+					}
+					thing := self.Thing{
+						GUID:        guid.String(),
+						Type:        "IThing",
+						DataType:    "voice_intent",
+						CreateTime:  float64(time.Now().Unix()),
+						Text:        "play_music",
+						Confidence:  float64(prob),
+						Info:        "play_music",
+						Name:        "play_music",
+						State:       "ADDED",
+						ECategory:   self.ThingCategoryPERCEPTION,
+						FImportance: 1,
+						FLifeSpan:   3600,
+						Data:        map[string]string{"intent": "play_music"},
+					}
+					logger.Println("publishing play")
+					if err := bb.Pub(self.TargetBlackboard, thing); err != nil {
+						logger.Println(err)
+					}
+				},
+			})
+			eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "intu_pause", vsh.Action{
+				MinActivationProb: 0.9,
+				MaxResetProb:      0.2,
+				TimeLastCalled:    time.Now(),
+				HandlerFunction: func(prob float32) {
+					guid, err := uuid.NewV4()
+					if err != nil {
+						logger.Println(err)
+						return
+					}
+					thing := self.Thing{
+						GUID:        guid.String(),
+						Type:        "IThing",
+						DataType:    "voice_intent",
+						CreateTime:  float64(time.Now().Unix()),
+						Text:        "pause_music",
+						Confidence:  float64(prob),
+						Info:        "pause_music",
+						Name:        "pause_music",
+						State:       "ADDED",
+						ECategory:   self.ThingCategoryPERCEPTION,
+						FImportance: 1,
+						FLifeSpan:   3600,
+						Data:        map[string]string{"intent": "pause_music"},
+					}
+					if err := bb.Pub(self.TargetBlackboard, thing); err != nil {
+						logger.Println(err)
+					}
+				},
+			})
+			eb.Register(intent.Vocabulary.Name, intent.SkipSong, "intu_skip", vsh.Action{
+				MinActivationProb: 0.9,
+				MaxResetProb:      0.2,
+				TimeLastCalled:    time.Now(),
+				HandlerFunction: func(prob float32) {
+					guid, err := uuid.NewV4()
+					if err != nil {
+						logger.Println(err)
+						return
+					}
+					thing := self.Thing{
+						GUID:        guid.String(),
+						Type:        "IThing",
+						DataType:    "voice_intent",
+						CreateTime:  float64(time.Now().Unix()),
+						Text:        "skip_music",
+						Confidence:  float64(prob),
+						Info:        "skip_music",
+						Name:        "skip_music",
+						State:       "ADDED",
+						ECategory:   self.ThingCategoryPERCEPTION,
+						FImportance: 1,
+						FLifeSpan:   3600,
+						Data:        map[string]string{"intent": "skip_music"},
+					}
+					if err := bb.Pub(self.TargetBlackboard, thing); err != nil {
+						logger.Println(err)
+					}
+				},
+			})
+		} else {
+			logger.Println("can't connect to Intu blackboard:", err)
+		}
 	} else {
-		logger.Println("can't connect to Intu blackboard")
+		logger.Println("not trying to connect the Intu blackboard")
 	}
 
 	eb.Register(intent.Vocabulary.Name, intent.ShutDown, "shutdown", vsh.Action{
@@ -158,8 +162,18 @@ func startVsh(
 	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip", vsh.MakeDefaultAction(skipTrack))
 	eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "pause", vsh.MakeDefaultAction(pauseAudio))
 	eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "play", vsh.MakeDefaultAction(playAudio))
+	var uploadMinActivationProb float32 = 0.95
+	saveClipThreshold := os.Getenv("SAVE_CLIP_THRESHOLD")
+	if saveClipThreshold != "" {
+		parsedFloat, err := strconv.ParseFloat(saveClipThreshold, 64)
+		if err != nil {
+			logger.Println("Can't parse SAVE_CLIP_THRESHOLD:", err.Error())
+		} else {
+			uploadMinActivationProb = float32(parsedFloat)
+		}
+	}
 	eb.Register(intent.Vocabulary.Name, intent.UploadClip, "upload", vsh.Action{
-		MinActivationProb: 0.95,
+		MinActivationProb: uploadMinActivationProb,
 		MaxResetProb:      0.5,
 		CoolDownDuration:  10 * time.Second,
 		TimeLastCalled:    time.Now(),

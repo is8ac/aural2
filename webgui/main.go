@@ -203,6 +203,7 @@ func start() {
 			}
 		}
 		if ke.Key == "s" && ke.AltKey {
+			print("saving")
 			go postLabelsSet(labelsSet)
 		}
 		if ke.Key == "Delete" {
@@ -244,7 +245,7 @@ func start() {
 }
 
 func main() {
-	fmt.Println("Audio vis GUI version 0.1.5")
+	fmt.Println("Audio vis GUI version 0.1.6")
 	w := dom.GetWindow()
 	w.AddEventListener("DOMContentLoaded", true, func(event dom.Event) {
 		go start()
