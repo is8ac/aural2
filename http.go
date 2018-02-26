@@ -263,7 +263,7 @@ func makeSampleHandler(putClipID func(libaural2.ClipID) error, dump func() *liba
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
-		if err := ioutil.WriteFile("audio/"+id.FSsafeString()+".raw", audioClip[:], 0644); err != nil {
+		if err := ioutil.WriteFile("persist/audio/"+id.FSsafeString()+".raw", audioClip[:], 0777); err != nil {
 			logger.Println(err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
@@ -282,7 +282,7 @@ func makeSaveModel(onlineSessions map[libaural2.VocabName]*tftrain.OnlineSess) f
 				logger.Println(err)
 				continue
 			}
-			f, err := os.Create("models/" + string(vocabName) + ".pb")
+			f, err := os.Create("persist/models/" + string(vocabName) + ".pb")
 			if err != nil {
 				logger.Println(err)
 				continue
@@ -400,5 +400,6 @@ func serve(
 	fs := http.FileServer(http.Dir("webgui/static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.Handle("/", r)
+	logger.Println("go to <ipaddr>:48125/intent/index to label audio")
 	http.ListenAndServe(":48125", nil)
 }

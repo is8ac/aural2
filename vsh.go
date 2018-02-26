@@ -1,156 +1,116 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"net"
 	"strconv"
+	"sync"
 	"time"
 
 	"os"
 
-	"github.com/fhs/gompd/mpd"
-	"github.com/open-horizon/self-go-sdk/self"
-	"github.com/satori/go.uuid"
 	tf "github.com/tensorflow/tensorflow/tensorflow/go"
 	"github.ibm.com/Blue-Horizon/aural2/libaural2"
 	"github.ibm.com/Blue-Horizon/aural2/vsh"
 	"github.ibm.com/Blue-Horizon/aural2/vsh/intent"
 )
 
+type intentMsg struct {
+	Name string    `json:"name"`
+	Prob float32   `json:"prob"`
+	TS   time.Time `json:"ts"`
+}
+
+func initMakeSendIntentMsgAction(intentChan chan intentMsg) func(string, float32) vsh.Action {
+	return func(intentName string, minProb float32) (action vsh.Action) {
+		action = vsh.Action{
+			MinActivationProb: minProb,
+			MaxResetProb:      0.2,
+			HandlerFunction: func(prob float32) {
+				fmt.Println(intentName, prob)
+				intentChan <- intentMsg{
+					Name: intentName,
+					Prob: prob,
+					TS:   time.Now(),
+				}
+			},
+		}
+		return
+	}
+}
+
 func startVsh(
 	saveClip func(*libaural2.AudioClip),
 	stepInferenceFuncs map[libaural2.VocabName]func(*tf.Tensor) ([]float32, error),
 	beforeShutdown func(),
-	bbHost string,
 ) (
 	dump func() *libaural2.AudioClip,
 ) {
-	var pauseAudio func()
-	var playAudio func()
-	var skipTrack func()
-	client, err := mpd.Dial("tcp", "localhost:6600")
+	// connect to the audio stream
+	conn, err := net.Dial("tcp", "microphone:48926")
 	if err != nil {
-		logger.Println("failed to connect to mpd")
-		pauseAudio = func() { logger.Println("pausing (but no mpd connection)") }
-		playAudio = func() { logger.Println("playing (but no mpd connection)") }
-		skipTrack = func() { logger.Println("skiping (but no mpd connection)") }
-	} else {
-		pauseAudio = func() { logger.Println("pause"); client.Pause(true) }
-		playAudio = func() { logger.Println("play"); client.Pause(false) }
-		skipTrack = func() { logger.Println("next"); client.Next() }
-		go func() {
-			for {
-				client.Ping()
-				time.Sleep(time.Second)
-			}
-		}()
+		logger.Println("failed to connect to microphone:48926, trying localhost:48926")
+		conn, err = net.Dial("tcp", "localhost:48926")
+		if err != nil {
+			panic(err)
+		}
 	}
-	resultChan, dump, err := vsh.Init(os.Stdin, stepInferenceFuncs)
+	listenAddr := "aural2:49610"
+	l, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		fmt.Println("Error aural2 on", listenAddr, err.Error(), ", trying localhost")
+		listenAddr = "localhost:49610"
+		l, err = net.Listen("tcp", listenAddr)
+		if err != nil {
+			fmt.Println("Error listening:", err.Error())
+			os.Exit(1)
+		}
+	}
+
+	fmt.Println("Listening for tcp connections on", listenAddr)
+	resultChan, dump, err := vsh.Init(conn, stepInferenceFuncs)
 	if err != nil {
 		panic(err)
 	}
-	//var speakerWorks = false
-	//var micWorks = false
-	eb := vsh.NewEventBroker(resultChan)
-	if os.Getenv("CONNECT_TO_INTU") == "true" {
-		// try to connect to the Intu blackboard.
-		bb, err := self.Init(bbHost, "aural2")
-		if err == nil {
-			eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "intu_play", vsh.Action{
-				MinActivationProb: 0.9,
-				MaxResetProb:      0.2,
-				TimeLastCalled:    time.Now(),
-				HandlerFunction: func(prob float32) {
-					guid, err := uuid.NewV4()
+	connsMap := map[int]*json.Encoder{}
+	var connsIndex int
+	connsMutex := sync.Mutex{}
+	intentsChan := make(chan intentMsg)
+	makeSendIntentMsgAction := initMakeSendIntentMsgAction(intentsChan)
+	go func() {
+		for {
+			msg := <-intentsChan
+			for i, encoder := range connsMap {
+				go func() {
+					err := encoder.Encode(msg)
+					logger.Println("writing message to conn", i)
 					if err != nil {
-						logger.Println(err)
-						return
+						logger.Println("got error:", err.Error(), "closing connection", i)
+						delete(connsMap, i)
 					}
-					thing := self.Thing{
-						GUID:        guid.String(),
-						Type:        "IThing",
-						DataType:    "voice_intent",
-						CreateTime:  float64(time.Now().Unix()),
-						Text:        "play_music",
-						Confidence:  float64(prob),
-						Info:        "play_music",
-						Name:        "play_music",
-						State:       "ADDED",
-						ECategory:   self.ThingCategoryPERCEPTION,
-						FImportance: 1,
-						FLifeSpan:   3600,
-						Data:        map[string]string{"intent": "play_music"},
-					}
-					logger.Println("publishing play")
-					if err := bb.Pub(self.TargetBlackboard, thing); err != nil {
-						logger.Println(err)
-					}
-				},
-			})
-			eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "intu_pause", vsh.Action{
-				MinActivationProb: 0.9,
-				MaxResetProb:      0.2,
-				TimeLastCalled:    time.Now(),
-				HandlerFunction: func(prob float32) {
-					guid, err := uuid.NewV4()
-					if err != nil {
-						logger.Println(err)
-						return
-					}
-					thing := self.Thing{
-						GUID:        guid.String(),
-						Type:        "IThing",
-						DataType:    "voice_intent",
-						CreateTime:  float64(time.Now().Unix()),
-						Text:        "pause_music",
-						Confidence:  float64(prob),
-						Info:        "pause_music",
-						Name:        "pause_music",
-						State:       "ADDED",
-						ECategory:   self.ThingCategoryPERCEPTION,
-						FImportance: 1,
-						FLifeSpan:   3600,
-						Data:        map[string]string{"intent": "pause_music"},
-					}
-					if err := bb.Pub(self.TargetBlackboard, thing); err != nil {
-						logger.Println(err)
-					}
-				},
-			})
-			eb.Register(intent.Vocabulary.Name, intent.SkipSong, "intu_skip", vsh.Action{
-				MinActivationProb: 0.9,
-				MaxResetProb:      0.2,
-				TimeLastCalled:    time.Now(),
-				HandlerFunction: func(prob float32) {
-					guid, err := uuid.NewV4()
-					if err != nil {
-						logger.Println(err)
-						return
-					}
-					thing := self.Thing{
-						GUID:        guid.String(),
-						Type:        "IThing",
-						DataType:    "voice_intent",
-						CreateTime:  float64(time.Now().Unix()),
-						Text:        "skip_music",
-						Confidence:  float64(prob),
-						Info:        "skip_music",
-						Name:        "skip_music",
-						State:       "ADDED",
-						ECategory:   self.ThingCategoryPERCEPTION,
-						FImportance: 1,
-						FLifeSpan:   3600,
-						Data:        map[string]string{"intent": "skip_music"},
-					}
-					if err := bb.Pub(self.TargetBlackboard, thing); err != nil {
-						logger.Println(err)
-					}
-				},
-			})
-		} else {
-			logger.Println("can't connect to Intu blackboard:", err)
+				}()
+			}
 		}
-	} else {
-		logger.Println("not trying to connect the Intu blackboard")
-	}
+	}()
+	eb := vsh.NewEventBroker(resultChan)
+	eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "play0.5", makeSendIntentMsgAction("play0.5", 0.5))
+	eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "play0.8", makeSendIntentMsgAction("play0.8", 0.8))
+	eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "play0.9", makeSendIntentMsgAction("play0.9", 0.9))
+	eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "play0.95", makeSendIntentMsgAction("play0.95", 0.95))
+	eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "play0.99", makeSendIntentMsgAction("play0.99", 0.99))
+
+	eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "pause0.5", makeSendIntentMsgAction("pause0.5", 0.5))
+	eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "pause0.8", makeSendIntentMsgAction("pause0.8", 0.8))
+	eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "pause0.9", makeSendIntentMsgAction("pause0.9", 0.9))
+	eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "pause0.95", makeSendIntentMsgAction("pause0.95", 0.95))
+	eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "pause0.99", makeSendIntentMsgAction("pause0.99", 0.99))
+
+	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip0.5", makeSendIntentMsgAction("skip0.5", 0.5))
+	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip0.8", makeSendIntentMsgAction("skip0.8", 0.8))
+	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip0.9", makeSendIntentMsgAction("skip0.9", 0.9))
+	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip0.95", makeSendIntentMsgAction("skip0.95", 0.95))
+	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip0.99", makeSendIntentMsgAction("skip0.99", 0.99))
 
 	eb.Register(intent.Vocabulary.Name, intent.ShutDown, "shutdown", vsh.Action{
 		MinActivationProb: 0.99,
@@ -159,10 +119,7 @@ func startVsh(
 			beforeShutdown()
 		},
 	})
-	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip", vsh.MakeDefaultAction(skipTrack))
-	eb.Register(intent.Vocabulary.Name, intent.PauseMusic, "pause", vsh.MakeDefaultAction(pauseAudio))
-	eb.Register(intent.Vocabulary.Name, intent.PlayMusic, "play", vsh.MakeDefaultAction(playAudio))
-	var uploadMinActivationProb float32 = 0.95
+	var uploadMinActivationProb float32 = 0.98
 	saveClipThreshold := os.Getenv("SAVE_CLIP_THRESHOLD")
 	if saveClipThreshold != "" {
 		parsedFloat, err := strconv.ParseFloat(saveClipThreshold, 64)
@@ -185,30 +142,21 @@ func startVsh(
 			logger.Println("saved clip:", clip.ID())
 		},
 	})
-	//eb.Register(word.Vocabulary.Name, word.Hello, "sound_test", vsh.MakeDefaultAction(func() {
-	//	speakerWorks = true
-	//	micWorks = true
-	//	logger.Println("Sound works")
-	//	eb.Unregister(word.Vocabulary.Name, word.Hello, "sound_test")
-	//}))
-
-	//go func() {
-	//	time.Sleep(2 * time.Second)
-	//	// now start playing audio.
-	//	f, err := os.Open("webgui/static/hello.wav")
-	//	if err != nil {
-	//		logger.Println(err)
-	//	}
-	//	s, format, err := wav.Decode(f)
-	//	if err != nil {
-	//		logger.Println(err)
-	//	}
-	//	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
-	//	speaker.Play(beep.Seq(s, beep.Callback(func() {
-	//		if !speakerWorks {
-	//			logger.Println("no speaker")
-	//		}
-	//	})))
-	//}()
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				fmt.Println("Error accepting: ", err.Error())
+			} else {
+				connsMutex.Lock()
+				connsIndex++
+				index := connsIndex
+				fmt.Println("adding connection", index)
+				encoder := json.NewEncoder(conn)
+				connsMap[connsIndex] = encoder
+				connsMutex.Unlock()
+			}
+		}
+	}()
 	return
 }

@@ -121,17 +121,13 @@ func Init(
 		var iters int
 		for {
 			iters++
-			n, err := reader.Read(buf)
+			_, err := reader.Read(buf)
 			if err != nil {
 				logger.Println(err)
 				close(result)
-				return
+				panic("connection to mic is broken")
 			}
 			rb.write(buf)
-			//logger.Println(n)
-			if n != libaural2.StrideWidth*2 {
-				//logger.Println(n)
-			}
 			mfccTensor, err := computeMFCC(buf)
 			if err != nil {
 				logger.Println(err)

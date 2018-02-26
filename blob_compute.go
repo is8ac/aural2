@@ -19,7 +19,7 @@ import (
 
 
 func getAudioClipFromFS(id libaural2.ClipID) (audioClip *libaural2.AudioClip, err error) {
-	rawBytes, err := ioutil.ReadFile("audio/" + id.FSsafeString() + ".raw")
+	rawBytes, err := ioutil.ReadFile("persist/audio/" + id.FSsafeString() + ".raw")
 	if err != nil {
 		return
 	}

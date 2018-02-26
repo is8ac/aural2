@@ -9,19 +9,13 @@ import (
 	"image/color"
 
 	la "github.ibm.com/Blue-Horizon/aural2/libaural2"
-	"github.ibm.com/Blue-Horizon/aural2/vsh/emotion"
 	"github.ibm.com/Blue-Horizon/aural2/vsh/intent"
-	"github.ibm.com/Blue-Horizon/aural2/vsh/speaker"
-	"github.ibm.com/Blue-Horizon/aural2/vsh/word"
 	"honnef.co/go/js/dom"
 	"honnef.co/go/js/xhr"
 )
 
 var vocabs = map[string]*la.Vocabulary{
-	"word":    &word.Vocabulary,
-	"intent":  &intent.Vocabulary,
-	"speaker": &speaker.Vocabulary,
-	"emotion": &emotion.Vocabulary,
+	"intent": &intent.Vocabulary,
 }
 
 func colorToCSSstring(colorObj color.Color) (colorString string) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -16,8 +17,11 @@ import (
 )
 
 var logger = log.New(os.Stdout, "arl2: ", log.Lshortfile)
+var version string
 
 func main() {
+	logger.Println("Starting Aural2", version)
+	logger.Println("TF version", tf.Version())
 	vocabList := []*libaural2.Vocabulary{
 		//&word.Vocabulary,
 		&intent.Vocabulary,
@@ -34,8 +38,8 @@ func main() {
 		vocabs[vocab.Name] = vocab
 		namesPrs[vocab.Name] = true
 		graph := tf.NewGraph()
-		trainedGraphBytes, err := ioutil.ReadFile("models/" + string(vocab.Name) + ".pb") // try to read the trained graph for that vocab
-		if err != nil {                                                                   // if the graph could not be loaded,
+		trainedGraphBytes, err := ioutil.ReadFile("persist/" + string(vocab.Name) + ".pb") // try to read the trained graph for that vocab
+		if err != nil {                                                                    // if the graph could not be loaded,
 			logger.Println("Using untrained graph for", vocab.Name)
 			err = graph.Import(untrainedGraphBytes, "") // then fall back to the untrained graph
 			if err != nil {
@@ -80,14 +84,16 @@ func main() {
 		}
 		stepInferenceFuncs[vocab.Name] = stepInfFunc // and put in the map.
 	}
-	db, err := boltstore.Init("label_store.db", []libaural2.VocabName{"word", "intent"}) // open the bolt DB
+	db, err := boltstore.Init("persist/label_store.db", []libaural2.VocabName{"word", "intent"}) // open the bolt DB
 	if err != nil {
 		logger.Fatalln(err)
 	}
+	os.Mkdir("persist/audio", 0777)
 	// func to save a 10 second audio clip
 	saveFunc := func(clip *libaural2.AudioClip) {
 		// write the file to disk
-		if err = ioutil.WriteFile("audio/"+clip.ID().FSsafeString()+".raw", clip[:], 0644); err != nil {
+		fmt.Println("writing clip to persist/audio")
+		if err = ioutil.WriteFile("persist/audio/"+clip.ID().FSsafeString()+".raw", clip[:], 0777); err != nil {
 			logger.Println(err)
 			return
 		}
@@ -112,7 +118,7 @@ func main() {
 				logger.Println(err)
 				continue
 			}
-			f, err := os.Create("models/" + string(vocabName) + ".pb")
+			f, err := os.Create("persist/models/" + string(vocabName) + ".pb")
 			if err != nil {
 				logger.Println(err)
 				continue
@@ -124,14 +130,13 @@ func main() {
 		logger.Println("models saved, shutting down now.")
 		os.Exit(0)
 	}
-	intuHostName := os.Getenv("INTUHOST")
-	if intuHostName == "" {
-		intuHostName = "intu"
-	}
+	logger.Println("starting vsh")
 	// start vsh, passing it the step
-	dumpClip := startVsh(saveFunc, stepInferenceFuncs, shutdownFunc, intuHostName)
+	dumpClip := startVsh(saveFunc, stepInferenceFuncs, shutdownFunc)
 	// start the http server and REST API.
+	logger.Println("starting web server")
 	go serve(db, onlineSessions, namesPrs, dumpClip, tdmMap, sleepms)
+	logger.Println("starting model saving loop")
 	for { // endless loop of saving the models every 10 minutes.
 		time.Sleep(10 * time.Minute)
 		for vocabName, oSess := range onlineSessions {
@@ -141,7 +146,7 @@ func main() {
 				logger.Println(err)
 				continue
 			}
-			f, err := os.Create("models/" + string(vocabName) + ".pb")
+			f, err := os.Create("persist/" + string(vocabName) + ".pb")
 			if err != nil {
 				logger.Println(err)
 				continue

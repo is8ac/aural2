@@ -1,7 +1,9 @@
-python/*
+python/
 label_serve
-tftrain/*
 models*
-audio/*
-aural_rs/*
-.git/*
+models_32/
+models_2017-11-29/
+tfutils/lstmutils/intent.pb
+audio/
+aural_rs/
+.git/

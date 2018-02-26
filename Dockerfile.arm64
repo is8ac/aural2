@@ -1,0 +1,113 @@
+FROM arm64v8/ubuntu:17.10 as go_build
+RUN apt-get update && apt-get install -y \
+  curl \
+  git \
+  build-essential \
+  libasound2-dev
+
+RUN curl -L \
+  "https://dl.google.com/go/go1.10.linux-arm64.tar.gz" | \
+  tar -C /usr/local -xz
+
+RUN curl -L \
+"http://1dd40.http.dal05.cdn.softlayer.net/arm_artifacts/libtensorflow-cpu-linux-arm64-1.6.0-rc1.tar.gz" | \
+  tar -C /usr/local -xz
+ENV LD_LIBRARY_PATH=/lib:/usr/lib:/usr/local/lib
+
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPATH=/go
+
+# go deps for tf
+RUN go get \
+  github.com/tensorflow/tensorflow/tensorflow/go \
+  github.com/boltdb/bolt \
+  github.com/golang/protobuf/proto \
+  github.com/gorilla/mux \
+  github.com/lucasb-eyer/go-colorful \
+  github.com/satori/go.uuid
+
+RUN cd ${GOPATH}/src/github.com/tensorflow/tensorflow && git checkout r1.6
+
+COPY *.go /go/src/github.ibm.com/Blue-Horizon/aural2/
+COPY boltstore/boltstore.go /go/src/github.ibm.com/Blue-Horizon/aural2/boltstore/
+COPY libaural2/libaural2.go /go/src/github.ibm.com/Blue-Horizon/aural2/libaural2/
+COPY tftrain/tftrain.go /go/src/github.ibm.com/Blue-Horizon/aural2/tftrain/
+COPY tfutils/tfutils.go /go/src/github.ibm.com/Blue-Horizon/aural2/tfutils/
+COPY tfutils/lstmutils/lstmutils.go /go/src/github.ibm.com/Blue-Horizon/aural2/tfutils/lstmutils/
+COPY vsh/vsh.go /go/src/github.ibm.com/Blue-Horizon/aural2/vsh/
+COPY vsh/intent/intent.go /go/src/github.ibm.com/Blue-Horizon/aural2/vsh/intent/intent.go
+COPY tfutils/demo/protobuf /go/src/github.ibm.com/Blue-Horizon/aural2/tfutils/demo/protobuf
+COPY urbitname/urbitname.go /go/src/github.ibm.com/Blue-Horizon/aural2/urbitname/
+
+RUN go build -o /bin/aural2 github.ibm.com/Blue-Horizon/aural2
+
+
+FROM arm64v8/ubuntu:17.10 as tf_build
+RUN apt-get update && apt-get install -y \
+  curl \
+  wget \
+  python-pip
+
+RUN wget http://1dd40.http.dal05.cdn.softlayer.net/arm_artifacts/tensorflow-1.5.0rc0-cp27-cp27mu-linux_aarch64.whl
+RUN pip install tensorflow-1.5.0rc0-cp27-cp27mu-linux_aarch64.whl
+
+COPY gen_train_graph.py /
+RUN cd / && python /gen_train_graph.py
+
+
+FROM arm64v8/ubuntu:17.10 as gopherjs_build
+
+RUN apt-get update && apt-get install -y \
+  curl \
+  git \
+  build-essential \
+  libasound2-dev
+
+RUN curl -L \
+  "https://dl.google.com/go/go1.9.2.linux-arm64.tar.gz" | \
+  tar -C /usr/local -xz
+
+ENV PATH="/usr/local/go/bin:/go/bin:${PATH}"
+ENV GOPATH=/go
+
+RUN go get \
+  github.com/gopherjs/gopherjs \
+  github.com/gopherjs/websocket/websocketjs \
+  honnef.co/go/js/dom \
+  github.com/lucasb-eyer/go-colorful \
+  honnef.co/go/js/xhr
+
+COPY libaural2/libaural2.go /go/src/github.ibm.com/Blue-Horizon/aural2/libaural2/
+COPY vsh/vsh.go /go/src/github.ibm.com/Blue-Horizon/aural2/vsh/
+COPY vsh/intent/intent.go /go/src/github.ibm.com/Blue-Horizon/aural2/vsh/intent/intent.go
+COPY webgui/main.go /go/src/github.ibm.com/Blue-Horizon/aural2/webgui/
+COPY urbitname/urbitname.go /go/src/github.ibm.com/Blue-Horizon/aural2/urbitname/
+
+RUN gopherjs build -o /main.js /go/src/github.ibm.com/Blue-Horizon/aural2/webgui/main.go
+
+
+FROM arm64v8/ubuntu:17.10
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  tar \
+  ncdu \
+  curl \
+  libasound2 \
+  alsa-utils
+
+RUN curl -L \
+"http://1dd40.http.dal05.cdn.softlayer.net/arm_artifacts/libtensorflow-cpu-linux-arm64-1.6.0-rc1.tar.gz" | \
+  tar -C /usr/local -xz
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+COPY webgui/static /webgui/static
+COPY webgui/templates /webgui/templates
+COPY --from=go_build /bin/aural2 /bin/aural2
+COPY --from=gopherjs_build /main.js /webgui/static/main.js
+COPY --from=tf_build target/train_graph.pb /target/train_graph.pb
+RUN mkdir /audio
+
+EXPOSE 48125
+
+CMD ["aural2"]
