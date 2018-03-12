@@ -14,7 +14,7 @@ It is desirable to have a model which takes as input a stream of audio and retur
 Given a good set of labeled audio, it is relatively easy to train a Long Short-Term Memory (LSTM) model to do this.
 However obtaining such a set of labeled audio is difficult.
 We present Aural2, a data collection and labeling infrastructure which helps users to quickly collect high value training data with which it trains an LSTM model to accurately transform a stream of audio into the probability, for any given action, that the user is currently telling Aural2 to perform it.
-The models trained by Aural2 are usually capable of correctly classifying the user's intent before the user has finished speaking; assuming latency to be measured from end of utterance, they has slight negative latency.
+The models trained by Aural2 are usually capable of correctly classifying the user's intent before the user has finished speaking; assuming latency to be measured from end of utterance, they have slight negative latency.
 Furthermore, the model will learn to integrate past context into its classifications, allowing it to learn to accurately solve the use-mention distinction[^1], and ignore commands directed at other voice assistants, all without itself requiring the use of wake-words.
 
 We describe the architecture of Aural2, its advantages over existing
@@ -124,11 +124,11 @@ passed forward in each iteration.
 # Architecture
 
 ![Architecture of Aural2](aural2.png "The architecture diagram")
-\
+
 
 ## Elements
 
-- **Microphone**: Measures air pressure. Returns a stream of 16,000 Hz int16 audio.
+- **Microphone**: Measures changes in air pressure. Returns a stream of 16,000 Hz int16 audio.
 - **Step MFCC**: A TF graph which takes 1024 bytes of audio, or 512 samples, or ~32ms, of audio, and returns the `[13]` floats of an MFCC.
 - **Step inference LSTM**: Every ~32ms, takes an MFCC from Step MFCC, updates the `[256]` memory of the LSTM accordingly, and returns `[50]` `softmax`ed probabilities for each intent.
 - **vsh**: Takes the list of 50 intent probabilities from the Step inference graph, and, if the threshold is reached, triggers an action.
@@ -213,7 +213,7 @@ However, if the state changes, if we have strong evidence that the world is no l
 
 Imagine a simple LSTM.
 For the past many steps it has been observing patterns of information which occur with far greater frequency in world of state 0.
-Say that the probably of the world transitioning from state 0 to state 0 is 0.9, and probabilities of state 0 transitioning to states 1 or 2 are 0.05.
+Say that the probably of the world transitioning from state 0 to state 0 is 0.9, and probabilities of state 0 transitioning to states 1 and 2 are 0.05.
 Given that the world is in state 0, there is a high prior probably that it will be in state 0 in the next time step.
 But if the LSTM observes information which is very rarely observed when in worlds of state 0, this is evidence sufficient to overcome the strong prior probably and stop believing that it is in a world of state 0.
 However this new information is often observed with approximately equal frequency in worlds of state 1 and state 2.
@@ -221,20 +221,20 @@ Although it knows that it is not in state 0, it does not know whether it is in s
 Recall that loss is calculated as the square of the difference between the models outputs and the true state of the world.
 The LSTM will therefore output a probabilities of, for example, 0.06 for state 0, and probabilities of 0.47 for 1 and 2.
 As it observes new information, it updates the probabilities that it is in worlds 1 and 2.
-After observing many time steps of information more likely to be observed when in, for example, state 2, it will once again assign a probability of, for example 1.96 to being in state 2, and assign a high prior probability to being in state 2 next iteration.
+After observing many time steps of information more likely to be observed when in, for example, state 2, it will once again assign a probability of, for example 0.96 to being in state 2, and assign a high prior probability to being in state 2 next iteration.
 
 ## vsh
 The LSTM model outputs a list of probabilities of intents every 32ms.
-While far more useful than before, this format of information is still not maximally convenient for our purposes.
+While far more useful than before, this format of information is still far from maximally convenient for our purposes.
 The simple preprocessing layer used by Aural2 is called Voice SHell, or vsh.
 It is quite primitive and may be replaced by some more powerful system such as Intu[^intu].
-However it has several important features necessary to make good use of the output of LSTM.
+However it has several important features necessary to make good use of the output of the LSTM.
 
 [^intu]: https://github.com/watson-intu/self
 
 An LSTM trained by Aural2 tries to reduce loss.
 A model which assigns high confidence to only the second part of the utterance "Play" being the `PlayMusic` intent has greater loss than a model which assigns high probability to every part of the utterance being the `PlayMusic` intent.
-A model which assigns a probability of 0.6 to the utterance "Play" being the `PlayMusic` intent has greater loss than a model which which assigns a probability of 0.9 to the utterance being the `PlayMusic` intent.
+A model which assigns a probability of 0.6 to the utterance "Play" being the `PlayMusic` intent has greater loss than a model which assigns a probability of 0.9 to the utterance being the `PlayMusic` intent.
 The model wants to classify the whole utterance with high probability.
 These same principles work in reverse.
 
@@ -249,7 +249,7 @@ All of this takes place in the few hundred milliseconds during which the user is
 
 vsh allows event handler functions to be registered for each of the outputs.
 When an output is greater than the specified threshold, it is called.
-A perfect LSTM will fire the `PlayMusic` every 32ms for the entire duration of the utterance.
+A perfect LSTM will fire the `PlayMusic` event every 32ms for the entire duration of the utterance.
 While causing music to start playing several times will likely not cause significant harm, other intents are not safe to be called multiple times in quick succession.
 Therefore, the primary task of vsh is to transform the LSTMs classification of the intent which the user is currently expressing, into single events which fire only once for each command.
 This is easily achieve by the use of a boolean variable for each output which is set to `true` when the upper threshold is reached and the event handler is called, and `false` when the output falls below some lower threshold.
@@ -296,7 +296,7 @@ As the user continues speaking the word "play", we want the LSTM to continue to 
 But as soon as the LSTM receives an MFCC of silence, we want it to go back to outputting a value close to 1 for state 0, and close to 0 for every other state.
 
 This is the behavior which we would like the LSTM to exhibit.
-While it would perhaps be possible to code such behavior by hand, it would be tedious, and likely inaccurate.
+While it would perhaps be possible to code such behavior by hand, it would be tedious and likely inaccurate.
 
 Instead, we train the LSTM on pairs of lists of input MFCCs and corresponding correct states.
 To do this, we must first collect audio rich in interesting states, and then annotate this audio with correct state information.
@@ -393,14 +393,12 @@ various graphs can read and write to the shared memory safely.
 
 # Results
 ## Quantitative performance
-The neural net used by Aural2 is continuously trained in real time from
-a dynamically collected training set. The distribution of data added to
-the training set changes depending on the environment and user, which
-depend on the state of the Aural2 model.
+The neural net used by Aural2 is continuously trained in real time from a dynamically collected training set.
+The distribution of data added to the training set changes depending on the environment and user, which depend on the state of the Aural2 model.
 
-For example, because the collection of training data is triggered by the `saveAudio` intent, all clips of audio contain the an utterance which some past state of the model thinks is the user telling it to save audio.
+For example, because the collection of training data is triggered by the `saveAudio` intent, all clips of audio contain an utterance which some past state of the model thought was the user telling it to save audio.
 If the model is well trained, it will only contain true examples, but badly trained models will collect many false positives.
-Because of this bias, the model quickly approach 0 false positives.
+Because of this bias, the model quickly approach 0 false positives for the `saveAudio` intent.
 
 There is no standard training or test set for Aural2; each user is
 encouraged to generate their own training set, and to keep saving and
@@ -424,11 +422,8 @@ by Aural2 is trained to label the whole duration of the utterance, it
 will usually begin outputting the intent before the utterance is
 finished; a whole utterance is unneeded to correctly classify an intent.
 
-As Aural2 is trained locally, its model is trained on the user\'s voice
-recorded from actual usage. There is no need to collect a diverse
-training set; what would in any other model be overfitting to a single
-user or small group of users is Aural2's correct and non-problematic
-behavior.
+As Aural2 is trained locally, its model is trained on the user\'s voice recorded from actual usage.
+There is no need to collect a diverse training set; what would in any other model be undesirable overfitting to a single user or small group of users is Aural2's correct and non-problematic behavior.
 
 An advantage of sending audio to the cloud for conversion to an intent
 is that it allows such a system to use models running on servers in the
@@ -454,42 +449,44 @@ We find that, from a few minutes of training data, Aural2 is well able to learn 
 Google home and Amazon echo can therefore be used in parallel with Aural2.
 
 
-We invite readers to download Aural2 at https://github.ibm.com/ifleonar/aural2 so as to evaluate it for themselves.
+We invite readers to try Aural2 so as to evaluate for themselves.
 
 ## Shortcomings
 
 Although perhaps superior to existing technology in latency, simplicity,
-and speed of training, Aural2 currently uses one-hot embedding which
-scales linearly with number of outputs. While the currently used
-embedding size of 50 intents is fully sufficient for many tasks such as
-controlling music, interacting with simple toys, or as a safety stop for
-industrial equipment, it would likely be impractical for many thousands
-of outputs, and as such, can have no ambition for use in full vocabulary
-natural language parsing.
+and speed of training, Aural2 has severe severe short comings.
+It currently uses one-hot embedding which scales linearly with number of outputs.
+While the currently used embedding size of 50 intents is fully sufficient for many tasks such as controlling music, interacting with simple toys, or as a safety stop for industrial equipment, it would likely be impractical for many thousands of outputs, and as such, can have no ambition for use in full vocabulary natural language parsing.
 
-Additionally, Aural2 leaves much to be desired with regard to the
-labeling of training data. While it can save audio on command, this
-merely helps to collect unlabeled audio rich in states which the user
-thought a past state of the model had misclassified; it does nothing to
-label the audio with the true state.
+Additionally, Aural2 leaves much to be desired with regard to the labeling of training data.
+While it can save audio on command, this merely helps to collect unlabeled audio rich in states which the user thought a past state of the model had misclassified; it does nothing to label the audio with the true state.
 
-A significant improvement to Aural2 would be to make use of user
-feedback to directly train via reinforcement learning. This would
-require an additional model to classify user voice, facial expressions,
-etc, into an emotional state. This hybrid system of training an emotion
-classifier via supervised learning, which can then be used to train an
-intent model via reinforcement learning is however somewhat inelegant.
+Aural2 must run a a single machine.
+When that machine fails, training data and model parameters are lost.
+While it is possible to back up training data and models, this is inconvenient.
 
-Another potential improvement would be to use a pair of one-hot embedded
-outputs, one for intents and another for entities.
-Whereas the current Aural2 outputs the action which the user wishes the machine to take, a dual embedding would allow Aural2 to classify arbitrary pairs of intent and
-initiate.
-This would allow a significantly larger portion of the space of commands to be represented
-by the output.
+Likewise, Aural2 must both train and infer on the same machine.
+It is not possible to train the model on a powerful desktop while simultaneously running inference on a cheap ARM single board computer (SBC).
+The only possibility is to copy all training data from the SBC to the desktop, train, and then copy both model and training data back to the SBC.
+This is inconvenient and error prone.
+
+# Future directions
+While useful as a proof of concept, Aural2 underwent various major design changes during its development and is therefore both poorly designed and badly implemented.
+As such, it is not fit for any serous use.
+Early development is now underway on Aural3 (name subject to change) which is intended to address many of Aural2s failings and introduce various additional features.
+
+While it is difficult to predict the exact features of Aural3, they will likely include:
+
+- Heterogeneous clustering: Often we have multiple cheap SBCs with microphones as well as far more powerful machines such as desktop computers or even GPU equipped POWER servers. If all of these heterogeneous devices are to usefully contribute to the function of a single instance of Aural3, all nodes in the cluster, from the littlest SBC to the greatest POWER server must maintain a single eventually consistent state of the model parameters, the SBCs to perform inference and data selection, and the more powerful GPU machines to perform training to update the model parameters. This would allow inference and training nodes to leave the cluster without warning with no impacting to intent detection allowing zero downtime upgrades.
+- Teacher network: A bidirectional RNN can use information from both the past and future to label state. It can therefore generally achieve significantly greater accuracy then a single directional RNN can. It has the disadvantage however of requiring information from the future and therefore being unable to run in real time. It is however suitable for use as a teacher model[^studentteacher] to automatically label large amounts of training data on which to train the single directional student model which can be used for intent classification in real time. This would allow Aural3 to improve the accuracy of its single layer model even when no new human labeled data was created. Additional, as users generally behave differently in worlds in which there intents were correctly fulfilled and worlds in which they were not, provided that the teacher model can observe the action which was actually take, it should be able to learn to use user response to better label the users words in hindsight. This could potentially grants many of the advantages of reinforcement learning while avoiding much of its difficulties.
+- Multi dimensional intents: Often the user wishes some action to be performed to some entity. Sometimes actions take several independent parameters. It would therefore be good for the output of Aural3 to be, not single dimensional as it is in Aural2, but `n` dimensional, or at the least 2 dimensional, one output for intent and one for entity. As an additional refinement, it may be useful for Aural3 to elicit additional information from the user if they fail to sufficiently disambiguate all dimensions. In this sense, it can be thought of, not as only passively observing the user, but as actively running experiments on the user to maximize expected information gain.
+- Multimodal input: The exclusive use of audio to gain information about the state of the world is not fundamental to the architecture of Aural2 or Aural3. It should be relatively simple to add additional channels of information such as time of day or a camera.
+
+[^studentteacher]: Distilling the Knowledge in a Neural Network: https://arxiv.org/abs/1503.02531
 
 [^1]: Use-mention distinction:
-    [[https://en.wikipedia.org/wiki/Use-mention\_distinction]{.underline}](https://en.wikipedia.org/wiki/Use-mention_distinction)
-    [[http://shomir.net/pdf/publications/swilson\_cicling11.pdf]{.underline}](http://shomir.net/pdf/publications/swilson_cicling11.pdf)
+    [[https://en.wikipedia.org/wiki/Use-mention_distinction]{.underline}](https://en.wikipedia.org/wiki/Use-mention_distinction)
+    [[http://shomir.net/pdf/publications/swilson_cicling11.pdf]{.underline}](http://shomir.net/pdf/publications/swilson_cicling11.pdf)
 
 [^2]: https://developer.amazon.com/docs/custom-skills/define-the-interaction-model-in-json-and-text.html
 
@@ -504,10 +501,10 @@ by the output.
 [^7]: https://arxiv.org/pdf/1305.1145.pdf
 
 [^8]: Recurrent Neural Networks:
-    [[https://en.wikipedia.org/wiki/Recurrent\_neural\_network]{.underline}](https://en.wikipedia.org/wiki/Recurrent_neural_network)
+    [[https://en.wikipedia.org/wiki/Recurrent_neural_network]{.underline}](https://en.wikipedia.org/wiki/Recurrent_neural_network)
     [[https://karpathy.github.io/2015/05/21/rnn-effectiveness/]{.underline}](https://karpathy.github.io/2015/05/21/rnn-effectiveness/)
 
-[^9]: https://en.wikipedia.org/wiki/Vanishing\_gradient\_problem
+[^9]: https://en.wikipedia.org/wiki/Vanishing_gradient_problem
 
 [^10]: One-hot embedding: https://en.wikipedia.org/wiki/One-hot
 
