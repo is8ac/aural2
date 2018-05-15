@@ -293,15 +293,6 @@ We want it to return the probabilities that the world is in each of a finite set
 When we speak of world state in this context, we usually mean states such as "The user is currently telling the machine to play the music", or "The user is not telling the machine to do anything."
 However Aural2 is extensible to any set of world states about which audio frequency distribution gives information.
 
-Note that the vocabulary of states which a single model can classify must be exclusive.
-It is not possible for a user to be telling the machine to play music and to pause it, at the same time.
-These world states are exclusive and can be classified by the same model.
-The user being happy, and wanting music to play, and being Alice, can all be true at the same time.
-To classify the user's emotional state, intent, and identity, one would need three distinct vocabularies and corresponding models.
-But in most usage, we merely wish to classify the intent which the user is currently expressing.
-People almost always express zero or one intents at any given time.
-Therefore, if we wish the model to classify the intent which the the user is currently expressed, we can use a softmax output with state 0 reserved for the nil intent.
-
 As an example, imagine a vocabulary consisting of the states `nil`, `PlayMusic`, `SaveClip`, and `PruneShrubbery`, with indexes 0, 1, 2, and 3 respectively.
 Imagine that, to begin with, the user is silent.
 Every 32ms, the MFCC containing information about the world is given to the LSTM which writes it to its memory.
