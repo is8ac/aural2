@@ -82,14 +82,15 @@ func startVsh(
 		for {
 			msg := <-intentsChan
 			for i, encoder := range connsMap {
-				go func() {
-					err := encoder.Encode(msg)
+				logger.Print("conn", i)
+				go func(writer *json.Encoder, connID int) {
+					err := writer.Encode(msg)
 					logger.Println("writing message to conn", i)
 					if err != nil {
 						logger.Println("got error:", err.Error(), "closing connection", i)
 						delete(connsMap, i)
 					}
-				}()
+				}(encoder, i)
 			}
 		}
 	}()
@@ -111,6 +112,9 @@ func startVsh(
 	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip0.9", makeSendIntentMsgAction("skip0.9", 0.9))
 	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip0.95", makeSendIntentMsgAction("skip0.95", 0.95))
 	eb.Register(intent.Vocabulary.Name, intent.SkipSong, "skip0.99", makeSendIntentMsgAction("skip0.99", 0.99))
+
+	eb.Register(intent.Vocabulary.Name, intent.Next, "next0.95", makeSendIntentMsgAction("next0.95", 0.95))
+	eb.Register(intent.Vocabulary.Name, intent.Previous, "previous0.95", makeSendIntentMsgAction("previous0.95", 0.95))
 
 	eb.Register(intent.Vocabulary.Name, intent.ShutDown, "shutdown", vsh.Action{
 		MinActivationProb: 0.99,
