@@ -40,7 +40,7 @@ RUN cd / && python /gen_train_graph.py
 RUN ls /
 
 
-FROM golang:1.9 as gopherjs_build
+FROM golang:1.11 as gopherjs_build
 RUN go get \
   github.com/gopherjs/gopherjs \
   github.com/gopherjs/websocket/websocketjs \

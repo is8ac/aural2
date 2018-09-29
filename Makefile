@@ -9,9 +9,6 @@ VERSION ?= 0.3.4
 DOCKER_NAME ?= aural2_${SYSTEM_ARCH}
 DOCKER_HUB_ID ?= openhorizon
 
-GROUP_ID := $(shell id -g)
-USER_ID := $(shell id -u)
-
 target/dockerimage_$(ARCH): Dockerfile.$(ARCH) webgui/templates/index.html webgui/templates/tag.html webgui/templates/vocab.html webgui/static/style.css gen_train_graph.py main.go vsh.go
 	docker build -t $(DOCKER_NAME):$(VERSION) -f Dockerfile.$(ARCH) .
 	touch target/dockerimage_$(ARCH)
