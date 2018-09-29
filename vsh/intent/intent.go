@@ -23,6 +23,8 @@ var Vocabulary = libaural2.Vocabulary{
 		DontDoIt:       "Don'tDoIt",
 		UploadClip:     "UploadClip",
 		ShutDown:       "ShutDown",
+		Next:           "Next",
+		Previous:       "Previous",
 	},
 	Hue: map[libaural2.State]float64{
 		Nil: 0,
@@ -42,6 +44,8 @@ var Vocabulary = libaural2.Vocabulary{
 		"o": DontDoIt,
 		"u": UploadClip,
 		"d": ShutDown,
+		".": Next,
+		",": Previous,
 	},
 }
 
@@ -61,4 +65,6 @@ const (
 	DontDoIt   // Don't do whatever it was that you asked the user if you could do.
 	UploadClip // Upload the last 10 seconds of audio.
 	ShutDown
+	Next
+	Previous
 )
