@@ -1,25 +1,35 @@
 # aural2
 LSTM based speech command recognition.
 
-# Run
-If on x86_64:
-```
-docker run -it -p 48125:48125 --privileged summit.hovitos.engineering/x86_64/aural2
-```
-or if on an odroid-c2, Jetson Tx2, or other aarch64 machines:
-```
-docker run -it -p 48125:48125 --privileged summit.hovitos.engineering/aarch64/aural2
-```
 
-If you want persistence, include `-v /tmp/aural2/audio:/audio -v /tmp/aural2/label_store.db:/label_store.db -v /tmp/aural2/models:/models`, replacing `/tmp/aural2` with some persistent directory on the host.
-Be sure to `touch` /tmp/aural2/label_store.db before mounting it in docker, otherwise docker will create a directory.
+# Quickstart
+## x86:
+Create a network:
+```
+docker network create aural2
+```
+Then start the microphone container:
+```
+docker run -it --rm --privileged --name microphone --net=aural2 --net-alias=microphone --publish=48926:48926 is8ac/example_ms_x86_microphone:1.2.6
+```
+It should print `Listening for tcp connections on microphone:48926` on the last line.
+
+Then start the aural2 container:
+```
+docker run -it --rm --name aural2 --net=aural2 -p 48125:48125 --net-alias=aural2 -v /tmp/aural2:/persist is8ac/aural2_x86:0.3.4
+```
+Say "upload" a few times and then use `curl http://localhost:48125/saveclip` to save a 10 second sample of audio.
+Go to `http://localhost:48125/intent/index`, and click on the sample you just captured.
+Use space to play/pause, and arrow keys to navigate. Hold down the 'u' key while the cursor moves over the word you just said. When you are done labeling the intents, use alt+s, or close the tab to save.
+
+Use `curl -X POST -d "5" http://localhost:48125/sleepms` to make it train faster.
 
 # build
 ## With docker
 ```
 make
 ```
-This will build inside a build container, and place the artifacts in a run container.
+This will use multi stage docker build.
 
 ## Directly on host
 
